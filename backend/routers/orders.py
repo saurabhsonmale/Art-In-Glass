@@ -30,6 +30,10 @@ async def create_order(order_data: OrderCreate, current_user = Depends(get_curre
         order_dict["customer_id"] = current_user.user_id
         order_dict["order_status"] = "PENDING"
         order_dict["tracking_details"] = None
+        order_dict["payment_details"] = {
+            "method": order_data.payment_method or "cod",
+            "status": "PENDING"
+        }
         order_dict["created_at"] = None  # Will use default
         order_dict["updated_at"] = None  # Will use default
         
@@ -45,6 +49,7 @@ async def create_order(order_data: OrderCreate, current_user = Depends(get_curre
             "items": created_order["items"],
             "total_amount": created_order["total_amount"],
             "shipping_address": created_order["shipping_address"],
+            "payment_method": created_order.get("payment_method", "cod"),
             "order_status": created_order["order_status"],
             "tracking_details": created_order.get("tracking_details"),
             "created_at": created_order["created_at"],

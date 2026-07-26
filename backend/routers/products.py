@@ -28,6 +28,9 @@ async def get_all_products():
                 "category": product["category"],
                 "images": product.get("images", []),
                 "is_customizable": product.get("is_customizable", False),
+                "customization_options": product.get("customization_options", {}),
+                "rating": product.get("rating", 0.0),
+                "estimated_days": product.get("estimated_days", 3),
                 "created_at": product["created_at"]
             })
         
@@ -69,6 +72,9 @@ async def get_product_by_id(product_id: str):
             "category": product["category"],
             "images": product.get("images", []),
             "is_customizable": product.get("is_customizable", False),
+            "customization_options": product.get("customization_options", {}),
+            "rating": product.get("rating", 0.0),
+            "estimated_days": product.get("estimated_days", 3),
             "created_at": product["created_at"]
         }
     
@@ -106,6 +112,9 @@ async def create_product(product_data: ProductCreate):
             "category": created_product["category"],
             "images": created_product.get("images", []),
             "is_customizable": created_product.get("is_customizable", False),
+            "customization_options": created_product.get("customization_options", {}),
+            "rating": created_product.get("rating", 0.0),
+            "estimated_days": created_product.get("estimated_days", 3),
             "created_at": created_product["created_at"]
         }
     
@@ -137,6 +146,9 @@ async def get_products_by_category(category: str):
                 "category": product["category"],
                 "images": product.get("images", []),
                 "is_customizable": product.get("is_customizable", False),
+                "customization_options": product.get("customization_options", {}),
+                "rating": product.get("rating", 0.0),
+                "estimated_days": product.get("estimated_days", 3),
                 "created_at": product["created_at"]
             })
         

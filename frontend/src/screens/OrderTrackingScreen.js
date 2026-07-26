@@ -15,6 +15,48 @@ const orderStatuses = [
   { id: 'DELIVERED', label: 'Delivered', icon: 'home-outline', description: 'Order delivered successfully' },
 ];
 
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'PENDING':
+      return '#F59E0B';
+    case 'ACCEPTED':
+      return '#3B82F6';
+    case 'IN_PRODUCTION':
+      return '#8B5CF6';
+    case 'PACKED':
+      return '#EC4899';
+    case 'DISPATCHED':
+      return '#10B981';
+    case 'DELIVERED':
+      return '#059669';
+    case 'CANCELLED':
+      return '#EF4444';
+    default:
+      return '#6B7280';
+  }
+};
+
+const getStatusIcon = (status) => {
+  switch (status) {
+    case 'PENDING':
+      return 'time-outline';
+    case 'ACCEPTED':
+      return 'checkmark-circle-outline';
+    case 'IN_PRODUCTION':
+      return 'construct-outline';
+    case 'PACKED':
+      return 'cube-outline';
+    case 'DISPATCHED':
+      return 'rocket-outline';
+    case 'DELIVERED':
+      return 'home-outline';
+    case 'CANCELLED':
+      return 'close-circle-outline';
+    default:
+      return 'help-outline';
+  }
+};
+
 export default function OrderTrackingScreen({ route }) {
   const { orderId } = route.params;
   const [order, setOrder] = useState(null);
@@ -223,48 +265,6 @@ export default function OrderTrackingScreen({ route }) {
   );
 }
 
-const getStatusColor = (status) => {
-  switch (status) {
-    case 'PENDING':
-      return '#F59E0B';
-    case 'ACCEPTED':
-      return '#3B82F6';
-    case 'IN_PRODUCTION':
-      return '#8B5CF6';
-    case 'PACKED':
-      return '#EC4899';
-    case 'DISPATCHED':
-      return '#10B981';
-    case 'DELIVERED':
-      return '#059669';
-    case 'CANCELLED':
-      return '#EF4444';
-    default:
-      return '#6B7280';
-  }
-};
-
-const getStatusIcon = (status) => {
-  switch (status) {
-    case 'PENDING':
-      return 'time-outline';
-    case 'ACCEPTED':
-      return 'checkmark-circle-outline';
-    case 'IN_PRODUCTION':
-      return 'construct-outline';
-    case 'PACKED':
-      return 'cube-outline';
-    case 'DISPATCHED':
-      return 'rocket-outline';
-    case 'DELIVERED':
-      return 'home-outline';
-    case 'CANCELLED':
-      return 'close-circle-outline';
-    default:
-      return 'help-outline';
-  }
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -326,10 +326,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   timelineItem: {
@@ -396,10 +393,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   trackingItem: {
@@ -429,10 +423,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   orderItem: {
@@ -493,10 +484,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   addressRow: {

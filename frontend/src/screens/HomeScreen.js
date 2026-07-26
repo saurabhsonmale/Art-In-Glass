@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ScrollView, Dimensions } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ScrollView, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
@@ -16,8 +17,11 @@ const categories = [
 
 export default function HomeScreen({ navigation }) {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const { user } = useAuth();
+  const { addToCart, getCartCount } = useCart();
 
   useEffect(() => {
     fetchProducts();
@@ -27,11 +31,39 @@ export default function HomeScreen({ navigation }) {
     try {
       const response = await axios.get(`${API_BASE_URL}/products`);
       setProducts(response.data);
+      setFilteredProducts(response.data);
     } catch (error) {
       console.error('Error fetching products:', error);
+      Alert.alert('Error', 'Failed to load products. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const filterByCategory = (categoryName) => {
+    if (selectedCategory === categoryName) {
+      setSelectedCategory(null);
+      setFilteredProducts(products);
+    } else {
+      setSelectedCategory(categoryName);
+      const filtered = products.filter(product => product.category === categoryName);
+      setFilteredProducts(filtered);
+    }
+  };
+
+  const handleQuickBuy = (product) => {
+    addToCart(product, 1, {});
+    navigation.navigate('Checkout', {
+      items: [{
+        product_id: product.id,
+        title: product.title,
+        quantity: 1,
+        price: product.base_price,
+        custom_notes: null,
+        custom_image_url: null,
+      }],
+      total_amount: product.base_price,
+    });
   };
 
   const renderProduct = ({ item }) => (
@@ -52,18 +84,49 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.customizableText}>Customizable</Text>
           </View>
         )}
+        <TouchableOpacity 
+          style={styles.heartButton}
+          onPress={() => Alert.alert('Wishlist', 'Added to wishlist!')}
+        >
+          <Ionicons name="heart-outline" size={20} color="#8B5CF6" />
+        </TouchableOpacity>
       </View>
       <View style={styles.productInfo}>
         <Text style={styles.productTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.productCategory}>{item.category}</Text>
-        <Text style={styles.productPrice}>₹{item.base_price.toFixed(2)}</Text>
+        <View style={styles.categoryRow}>
+          <View style={styles.categoryTag}>
+            <Text style={styles.categoryText}>{item.category}</Text>
+          </View>
+          {item.rating > 0 && (
+            <View style={styles.ratingRow}>
+              <Ionicons name="star" size={12} color="#F59E0B" />
+              <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.priceRow}>
+          <Text style={styles.productPrice}>₹{item.base_price.toFixed(2)}</Text>
+          <TouchableOpacity 
+            style={styles.quickBuyButton}
+            onPress={() => handleQuickBuy(item)}
+          >
+            <Ionicons name="flash" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
 
   const renderCategory = ({ item }) => (
-    <TouchableOpacity style={styles.categoryCard}>
-      <View style={[styles.categoryIcon, { backgroundColor: item.color + '20' }]}>
+    <TouchableOpacity 
+      style={styles.categoryCard}
+      onPress={() => filterByCategory(item.name)}
+    >
+      <View style={[
+        styles.categoryIcon, 
+        { backgroundColor: item.color + '20' },
+        selectedCategory === item.name && styles.selectedCategoryIcon
+      ]}>
         <Ionicons name={item.icon} size={32} color={item.color} />
       </View>
       <Text style={styles.categoryName}>{item.name}</Text>
@@ -72,15 +135,21 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello, {user?.full_name?.split(' ')[0] || 'Guest'}! 👋</Text>
           <Text style={styles.headerTitle}>Discover Beautiful Resin Art</Text>
         </View>
+        <TouchableOpacity style={styles.cartButton} onPress={() => navigation.navigate('Cart')}>
+          <Ionicons name="cart-outline" size={28} color="#FFFFFF" />
+          {getCartCount() > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{getCartCount()}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Categories */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Categories</Text>
         <FlatList
@@ -93,22 +162,31 @@ export default function HomeScreen({ navigation }) {
         />
       </View>
 
-      {/* Featured Products */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Featured Products</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>See All</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>
+            {selectedCategory ? `${selectedCategory}` : 'Featured Products'}
+          </Text>
+          {selectedCategory && (
+            <TouchableOpacity onPress={() => filterByCategory(selectedCategory)}>
+              <Text style={styles.clearFilterText}>Clear Filter</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
         {loading ? (
           <View style={styles.loadingContainer}>
-            <Text>Loading products...</Text>
+            <ActivityIndicator size="large" color="#8B5CF6" />
+            <Text style={styles.loadingText}>Loading products...</Text>
+          </View>
+        ) : filteredProducts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cube-outline" size={60} color="#D1D5DB" />
+            <Text style={styles.emptyText}>No products found</Text>
           </View>
         ) : (
           <FlatList
-            data={products}
+            data={filteredProducts}
             renderItem={renderProduct}
             keyExtractor={item => item.id}
             numColumns={2}
@@ -133,6 +211,9 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   greeting: {
     fontSize: 16,
@@ -143,6 +224,27 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  cartButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  cartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   section: {
     marginTop: 24,
@@ -165,6 +267,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  clearFilterText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   categoriesList: {
     paddingRight: 24,
   },
@@ -181,6 +288,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  selectedCategoryIcon: {
+    borderWidth: 3,
+    borderColor: '#8B5CF6',
+  },
   categoryName: {
     fontSize: 12,
     color: '#4B5563',
@@ -196,10 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 16,
     marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     elevation: 3,
     overflow: 'hidden',
   },
@@ -232,6 +340,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  heartButton: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    elevation: 2,
+  },
   productInfo: {
     padding: 12,
   },
@@ -239,20 +360,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  productCategory: {
+  categoryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  categoryTag: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  categoryText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingText: {
     fontSize: 12,
     color: '#6B7280',
-    marginBottom: 4,
+    fontWeight: '600',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   productPrice: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#8B5CF6',
   },
+  quickBuyButton: {
+    backgroundColor: '#8B5CF6',
+    borderRadius: 8,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   loadingContainer: {
     paddingVertical: 40,
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  emptyContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
   },
 });

@@ -1,5 +1,5 @@
- from pydantic import BaseModel, Field, EmailStr, HttpUrl
-from typing import Optional, List
+from pydantic import BaseModel, Field, EmailStr, HttpUrl
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 
@@ -50,9 +50,10 @@ class User(UserBase):
 
 class UserResponse(UserBase):
     id: str
-    created_at: datetime
+    created_at: str  # Changed to str to handle ISO format datetime strings
 
     class Config:
+        arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
 
 
@@ -64,6 +65,9 @@ class ProductBase(BaseModel):
     category: str
     images: List[str] = []
     is_customizable: bool = False
+    customization_options: Optional[Dict[str, Any]] = None
+    rating: float = 0.0
+    estimated_days: int = 3
 
 
 class ProductCreate(ProductBase):
@@ -97,6 +101,11 @@ class ShippingAddress(BaseModel):
     phone: str
 
 
+class PaymentDetails(BaseModel):
+    method: str
+    status: str = "PENDING"
+
+
 class OrderItem(BaseModel):
     product_id: str
     title: str
@@ -116,6 +125,7 @@ class OrderBase(BaseModel):
     items: List[OrderItem]
     total_amount: float
     shipping_address: ShippingAddress
+    payment_method: Optional[str] = "cod"
 
 
 class OrderCreate(OrderBase):

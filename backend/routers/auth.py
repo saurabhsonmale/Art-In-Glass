@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from datetime import timedelta
+from datetime import datetime, timedelta
 from database import get_database, USERS_COLLECTION
 from models import UserCreate, UserLogin, UserResponse, Token
 from auth import get_password_hash, verify_password, create_access_token, get_current_active_user
@@ -40,7 +40,7 @@ async def register(user_data: UserCreate):
         user_dict = user_data.dict()
         user_dict.pop("password")
         user_dict["password_hash"] = password_hash
-        user_dict["created_at"] = user_dict.get("created_at", None)  # Will use default
+        # Don't set created_at - let MongoDB use the default from the model
         
         # Insert user
         result = await users_collection.insert_one(user_dict)
@@ -119,32 +119,65 @@ async def login(credentials: UserLogin):
         )
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=dict)
 async def get_current_user_info(current_user = Depends(get_current_active_user)):
     """Get current user information"""
     try:
         db = get_database()
         users_collection = db[USERS_COLLECTION]
         
-        user = await users_collection.find_one({"_id": ObjectId(current_user.user_id)})
+        # Validate user_id format
+        if not current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing user_id"
+            )
+        
+        # Convert string ID to ObjectId
+        try:
+            user_object_id = ObjectId(current_user.user_id)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid token: invalid user_id format - {str(e)}"
+            )
+        
+        user = await users_collection.find_one({"_id": user_object_id})
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
         
-        return {
+        # Handle created_at field - convert datetime to string
+        created_at = user.get("created_at")
+        if created_at is None:
+            created_at = datetime.utcnow().isoformat()
+        elif hasattr(created_at, 'isoformat'):
+            created_at = created_at.isoformat()
+        else:
+            # If it's already a string or other type, convert to string
+            created_at = str(created_at)
+        
+        # Build response with proper type conversion
+        response_data = {
             "id": str(user["_id"]),
-            "full_name": user["full_name"],
-            "email": user["email"],
-            "phone": user["phone"],
-            "role": user["role"],
-            "created_at": user["created_at"]
+            "full_name": str(user.get("full_name", "")),
+            "email": str(user.get("email", "")),
+            "phone": str(user.get("phone", "")),
+            "role": str(user.get("role", "customer")),
+            "created_at": created_at
         }
+        
+        return response_data
     
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"Error in /me endpoint: {str(e)}")
+        print(f"Traceback: {error_detail}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get user info: {str(e)}"

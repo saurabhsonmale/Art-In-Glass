@@ -31,20 +31,44 @@ export const AuthProvider = ({ children }) => {
 
   const checkStoredToken = async () => {
     try {
+      // Add a small delay to ensure AsyncStorage is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const storedToken = await AsyncStorage.getItem('token');
       const storedUser = await AsyncStorage.getItem('user');
       
       if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-        axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        try {
+          const userData = JSON.parse(storedUser);
+          setToken(storedToken);
+          setUser(userData);
+          axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        } catch (parseError) {
+          console.error('Error parsing stored user data:', parseError);
+          // Clear invalid data
+          await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('user');
+        }
       }
     } catch (error) {
       console.error('Error checking stored token:', error);
     } finally {
+      // Always set loading to false, even if there's an error
       setLoading(false);
     }
   };
+
+  // Safety timeout to ensure loading never sticks
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('Loading timeout - forcing loading to false');
+        setLoading(false);
+      }
+    }, 3000); // 3 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
 
   const login = async (email, password) => {
     try {
@@ -87,7 +111,20 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.post('/auth/register', userData);
 
-      return { success: true, data: response.data };
+      // Auto-login after successful registration
+      const loginResult = await login(userData.email, userData.password);
+      
+      if (loginResult.success) {
+        return { success: true, data: response.data, user: loginResult.user };
+      } else {
+        // Registration succeeded but auto-login failed
+        return { 
+          success: true, 
+          data: response.data, 
+          message: 'Registration successful! Please login.',
+          autoLoginFailed: true
+        };
+      }
     } catch (error) {
       console.error('Register error:', error);
       return { 

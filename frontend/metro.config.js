@@ -15,13 +15,20 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// Exclude node:sea and other node: protocol modules to avoid Windows/OneDrive path issues
+config.resolver.blockList = [
+  /node:sea/,
+  /node:.*protocol/,
+  /node:.*/,
+];
+
 // Disable symlinks to avoid OneDrive issues
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   try {
     return context.resolveRequest(context, moduleName, platform);
   } catch (error) {
-    if (error.message.includes('node:sea')) {
-      // Skip problematic node:sea module
+    if (error.message.includes('node:sea') || error.message.includes('node:')) {
+      // Skip problematic node: protocol modules
       return {
         type: 'empty',
         filePath: path.join(__dirname, 'node_modules', 'react-native', 'Libraries', 'Core', 'InitializeCore.js'),
@@ -29,6 +36,22 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     }
     throw error;
   }
+};
+
+// Add server configuration to prevent externals directory creation
+config.server = {
+  ...config.server,
+  enhanceMiddleware: (middleware) => {
+    return (req, res, next) => {
+      // Skip node: protocol requests
+      if (req.url && req.url.includes('node:')) {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+      return middleware(req, res, next);
+    };
+  },
 };
 
 module.exports = config;

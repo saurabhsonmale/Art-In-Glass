@@ -41,16 +41,67 @@ export default function RegisterScreen({ navigation }) {
     setLoading(false);
 
     if (result.success) {
-      Alert.alert(
-        'Success',
-        'Account created successfully! Please login.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Login')
-          }
-        ]
-      );
+      if (result.user) {
+        // Auto-login successful, user is already logged in
+        Alert.alert(
+          'Success',
+          'Account created successfully! Welcome to Art In Glass.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigation will be handled automatically by App.js based on auth state
+                // Reset form
+                setFullName('');
+                setEmail('');
+                setPhone('');
+                setPassword('');
+                setConfirmPassword('');
+              }
+            }
+          ]
+        );
+      } else if (result.autoLoginFailed) {
+        // Registration succeeded but auto-login failed
+        Alert.alert(
+          'Success',
+          'Account created successfully! Please login.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.navigate('Login');
+                // Reset form
+                setFullName('');
+                setEmail('');
+                setPhone('');
+                setPassword('');
+                setConfirmPassword('');
+              }
+            }
+          ]
+        );
+      } else {
+        // Registration successful
+        Alert.alert(
+          'Success',
+          'Account created successfully! Please login.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.navigate('Login');
+                // Reset form
+                setFullName('');
+                setEmail('');
+                setPhone('');
+                setPassword('');
+                setConfirmPassword('');
+              }
+            }
+          ]
+        );
+      }
     } else {
       Alert.alert('Registration Failed', result.error);
     }
@@ -188,10 +239,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 16,
     height: 56,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   inputIcon: {
@@ -209,10 +257,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 24,
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    boxShadow: '0px 4px 8px rgba(139, 92, 246, 0.3)',
     elevation: 5,
   },
   buttonDisabled: {
