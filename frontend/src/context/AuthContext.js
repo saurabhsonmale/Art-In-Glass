@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
@@ -18,6 +18,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
+  // Force re-render counter - increments on logout to force NavigationContainer remount
+  const [logoutCounter, setLogoutCounter] = useState(0);
 
   // Configure axios defaults
   useEffect(() => {
@@ -31,7 +33,6 @@ export const AuthProvider = ({ children }) => {
 
   const checkStoredToken = async () => {
     try {
-      // Add a small delay to ensure AsyncStorage is ready
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const storedToken = await AsyncStorage.getItem('token');
@@ -45,7 +46,6 @@ export const AuthProvider = ({ children }) => {
           axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
         } catch (parseError) {
           console.error('Error parsing stored user data:', parseError);
-          // Clear invalid data
           await AsyncStorage.removeItem('token');
           await AsyncStorage.removeItem('user');
         }
@@ -53,20 +53,18 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error checking stored token:', error);
     } finally {
-      // Always set loading to false, even if there's an error
       setLoading(false);
     }
   };
 
-  // Safety timeout to ensure loading never sticks
+  // Safety timeout
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('Loading timeout - forcing loading to false');
         setLoading(false);
       }
-    }, 3000); // 3 second timeout
-
+    }, 3000);
     return () => clearTimeout(timeout);
   }, [loading]);
 
@@ -79,7 +77,6 @@ export const AuthProvider = ({ children }) => {
 
       const { access_token, user_id, role } = response.data;
       
-      // Get user details
       const userResponse = await axios.get('/auth/me', {
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -88,11 +85,9 @@ export const AuthProvider = ({ children }) => {
 
       const userData = userResponse.data;
       
-      // Store token and user data
       await AsyncStorage.setItem('token', access_token);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
       
-      // Update state
       setToken(access_token);
       setUser(userData);
       axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
@@ -110,14 +105,11 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       const response = await axios.post('/auth/register', userData);
-
-      // Auto-login after successful registration
       const loginResult = await login(userData.email, userData.password);
       
       if (loginResult.success) {
         return { success: true, data: response.data, user: loginResult.user };
       } else {
-        // Registration succeeded but auto-login failed
         return { 
           success: true, 
           data: response.data, 
@@ -136,14 +128,70 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user');
+      console.log('🔵 AuthContext: Starting logout...');
       
-      setToken(null);
-      setUser(null);
+      // 1. Save token before clearing anything (for API call)
+      const savedToken = await AsyncStorage.getItem('token');
+      console.log('🔵 AuthContext: Token from storage:', savedToken ? 'YES' : 'NO');
+      
+      // 2. Call logout API FIRST with valid token (before clearing)
+      // This is critical - we must call the API while we still have the token
+      let apiSuccess = false;
+      if (savedToken) {
+        try {
+          console.log('🔵 AuthContext: Making POST to /auth/logout');
+          console.log('🔵 AuthContext: With token:', savedToken.substring(0, 20) + '...');
+          
+          const response = await axios.post('/auth/logout', {}, {
+            headers: { 
+              Authorization: `Bearer ${savedToken}` 
+            },
+            timeout: 5000
+          });
+          
+          console.log('✅ AuthContext: Logout API responded:', response.status);
+          console.log('✅ AuthContext: Response data:', response.data);
+          apiSuccess = true;
+        } catch (apiError) {
+          console.error('⚠️ AuthContext: Logout API error:', apiError.message);
+          if (apiError.response) {
+            console.error('⚠️ AuthContext: Response status:', apiError.response.status);
+            console.error('⚠️ AuthContext: Response data:', apiError.response.data);
+          }
+          // Continue with logout even if API call fails
+        }
+      } else {
+        console.warn('⚠️ AuthContext: No token found in storage');
+      }
+      
+      // 3. Clear stored data
+      try {
+        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('user');
+        console.log('🔵 AuthContext: AsyncStorage cleared');
+      } catch (storageError) {
+        console.error('Storage clear error:', storageError);
+      }
+      
+      // 4. Clear auth header from axios defaults
       delete axios.defaults.headers.common['Authorization'];
+      
+      // 5. Reset state - this triggers navigation remount via the key prop
+      setUser(null);
+      setToken(null);
+      setLogoutCounter(prev => prev + 1);
+      console.log('🔵 AuthContext: State reset, logoutCounter incremented');
+      
+      return { 
+        success: true, 
+        apiSuccess 
+      };
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ AuthContext: Logout error:', error);
+      return { 
+        success: false, 
+        error: 'Failed to logout. Please try again.' 
+      };
     }
   };
 
@@ -151,6 +199,7 @@ export const AuthProvider = ({ children }) => {
     user,
     token,
     loading,
+    logoutCounter,
     login,
     register,
     logout,

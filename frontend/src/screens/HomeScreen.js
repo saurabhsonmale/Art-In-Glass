@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ScrollView, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, ScrollView, Dimensions, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -19,13 +20,10 @@ export default function HomeScreen({ navigation }) {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const { user } = useAuth();
   const { addToCart, getCartCount } = useCart();
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
 
   const fetchProducts = async () => {
     try {
@@ -37,7 +35,20 @@ export default function HomeScreen({ navigation }) {
       Alert.alert('Error', 'Failed to load products. Please try again.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  // Re-fetch products when screen comes into focus (for live sync)
+  useFocusEffect(
+    useCallback(() => {
+      fetchProducts();
+    }, [])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchProducts();
   };
 
   const filterByCategory = (categoryName) => {
@@ -134,7 +145,17 @@ export default function HomeScreen({ navigation }) {
   );
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#8B5CF6']}
+          tintColor="#8B5CF6"
+        />
+      }
+    >
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello, {user?.full_name?.split(' ')[0] || 'Guest'}! 👋</Text>

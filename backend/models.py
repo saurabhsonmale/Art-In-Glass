@@ -68,6 +68,7 @@ class ProductBase(BaseModel):
     customization_options: Optional[Dict[str, Any]] = None
     rating: float = 0.0
     estimated_days: int = 3
+    is_active: bool = True
 
 
 class ProductCreate(ProductBase):

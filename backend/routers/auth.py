@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
-from database import get_database, USERS_COLLECTION
+from database import get_database, USERS_COLLECTION, TOKEN_BLACKLIST_COLLECTION
 from models import UserCreate, UserLogin, UserResponse, Token
-from auth import get_password_hash, verify_password, create_access_token, get_current_active_user
+from auth import get_password_hash, verify_password, create_access_token, get_current_active_user, get_current_user, oauth2_scheme
 from config import settings
 from bson import ObjectId
 from typing import Dict, Any
+from jose import JWTError, jwt
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
@@ -181,4 +183,42 @@ async def get_current_user_info(current_user = Depends(get_current_active_user))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get user info: {str(e)}"
+        )
+
+
+@router.post("/logout", response_model=Dict[str, str])
+async def logout(current_user = Depends(get_current_user), token: str = Depends(oauth2_scheme)):
+    """Logout user and invalidate token"""
+    try:
+        db = get_database()
+        token_blacklist_collection = db[TOKEN_BLACKLIST_COLLECTION]
+        
+        # Decode token to get expiration time
+        try:
+            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+            exp_timestamp = payload.get("exp")
+            
+            if exp_timestamp:
+                # Calculate when the token expires
+                expires_at = datetime.utcfromtimestamp(exp_timestamp)
+                
+                # Add token to blacklist
+                await token_blacklist_collection.insert_one({
+                    "token": token,
+                    "user_id": current_user.user_id,
+                    "expires_at": expires_at,
+                    "created_at": datetime.utcnow()
+                })
+        except JWTError:
+            # If we can't decode the token, still return success (client-side cleanup will handle it)
+            pass
+        
+        return {
+            "message": "Logged out successfully",
+            "status": "success"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Logout failed: {str(e)}"
         )

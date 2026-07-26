@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -14,124 +14,87 @@ import RegisterScreen from './src/screens/auth/RegisterScreen';
 
 // Main App Screens
 import HomeScreen from './src/screens/HomeScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 import ProductDetailScreen from './src/screens/ProductDetailScreen';
 import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
 import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
 
+// Admin Screens
+import AdminNavigator from './src/screens/admin/AdminNavigator';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Tab Navigator for Main App
+// Tab Navigator for Main App (Customer)
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Cart') {
-            iconName = focused ? 'cart' : 'cart-outline';
-          } else if (route.name === 'Orders') {
-            iconName = focused ? 'list' : 'list-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
-
+          if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
+          else if (route.name === 'Cart') iconName = focused ? 'cart' : 'cart-outline';
+          else if (route.name === 'Orders') iconName = focused ? 'list' : 'list-outline';
+          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#8B5CF6',
         tabBarInactiveTintColor: 'gray',
-        headerStyle: {
-          backgroundColor: '#8B5CF6',
-        },
+        headerStyle: { backgroundColor: '#8B5CF6' },
         headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerTitleStyle: { fontWeight: 'bold' },
       })}
     >
-      <Tab.Screen 
-        name="Home" 
-        component={HomeScreen}
-        options={{ title: 'Art In Glass' }}
-      />
-      <Tab.Screen 
-        name="Cart" 
-        component={CartScreen}
-        options={{ title: 'My Cart' }}
-      />
-      <Tab.Screen 
-        name="Orders" 
-        component={OrderHistoryScreen}
-        options={{ title: 'My Orders' }}
-      />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreenWrapper}
-        options={{ title: 'Profile' }}
-      />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Art In Glass' }} />
+      <Tab.Screen name="Cart" component={CartScreen} options={{ title: 'My Cart' }} />
+      <Tab.Screen name="Orders" component={OrderHistoryScreen} options={{ title: 'My Orders' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );
 }
 
-// Profile Placeholder Screen
-function ProfileScreen() {
-  const { user, logout } = useAuth();
-
+// Customer Navigator
+function CustomerNavigator() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Welcome, {user?.full_name || 'User'}!</Text>
-      <Text style={styles.subtext}>Role: {user?.role || 'Customer'}</Text>
-    </View>
-  );
-}
-
-// Wrapper to pass navigation prop to ProfileScreen
-function ProfileScreenWrapper({ navigation }) {
-  return <ProfileScreen navigation={navigation} />;
-}
-
-// Auth Stack Navigator
-function AuthStack() {
-  return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: '#8B5CF6',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-      }}
-    >
-      <Stack.Screen 
-        name="Login" 
-        component={LoginScreen}
-        options={{ title: 'Login' }}
-      />
-      <Stack.Screen 
-        name="Register" 
-        component={RegisterScreen}
-        options={{ title: 'Create Account' }}
-      />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main" component={MainTabs} />
+      <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ headerShown: true, title: 'Product Details', headerStyle: { backgroundColor: '#8B5CF6' }, headerTintColor: '#fff' }} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: true, title: 'Checkout', headerStyle: { backgroundColor: '#8B5CF6' }, headerTintColor: '#fff' }} />
+      <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} options={{ headerShown: true, title: 'Track Order', headerStyle: { backgroundColor: '#8B5CF6' }, headerTintColor: '#fff' }} />
     </Stack.Navigator>
   );
 }
 
-// Main App Navigator
-function AppNavigator() {
-  const { user, loading } = useAuth();
+// Auth Navigator
+function AuthNavigator() {
+  return (
+    <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#8B5CF6' }, headerTintColor: '#fff', headerTitleStyle: { fontWeight: 'bold' } }}>
+      <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Login' }} />
+      <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Create Account' }} />
+    </Stack.Navigator>
+  );
+}
 
-  console.log('AppNavigator render - loading:', loading, 'user:', user ? 'logged in' : 'not logged in');
+// Navigator components (no NavigationContainer wrapper)
+function CustomerNavigatorComponent() {
+  return <CustomerNavigator />;
+}
 
-  // Show loading screen while checking auth
+function AdminNavigatorComponent() {
+  return <AdminNavigator />;
+}
+
+function AuthNavigatorComponent() {
+  return <AuthNavigator />;
+}
+
+// Root navigator - conditionally renders based on auth state
+function RootNavigator() {
+  const { user, loading, logoutCounter } = useAuth();
+
   if (loading) {
-    console.log('Showing loading screen...');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#8B5CF6" />
@@ -140,61 +103,19 @@ function AppNavigator() {
     );
   }
 
-  // Show main app
-  console.log('Showing main app...');
-  try {
-    return (
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {user ? (
-            <>
-              <Stack.Screen name="Main" component={MainTabs} />
-              <Stack.Screen 
-                name="ProductDetail" 
-                component={ProductDetailScreen}
-                options={{ 
-                  headerShown: true,
-                  title: 'Product Details',
-                  headerStyle: { backgroundColor: '#8B5CF6' },
-                  headerTintColor: '#fff'
-                }}
-              />
-              <Stack.Screen 
-                name="Checkout" 
-                component={CheckoutScreen}
-                options={{ 
-                  headerShown: true,
-                  title: 'Checkout',
-                  headerStyle: { backgroundColor: '#8B5CF6' },
-                  headerTintColor: '#fff'
-                }}
-              />
-              <Stack.Screen 
-                name="OrderTracking" 
-                component={OrderTrackingScreen}
-                options={{ 
-                  headerShown: true,
-                  title: 'Track Order',
-                  headerStyle: { backgroundColor: '#8B5CF6' },
-                  headerTintColor: '#fff'
-                }}
-              />
-            </>
-          ) : (
-            <Stack.Screen name="Auth" component={AuthStack} />
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    );
-  } catch (error) {
-    console.error('Error rendering navigation:', error);
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Error loading app</Text>
-        <Text style={styles.errorDetail}>{error.message}</Text>
-      </View>
-    );
-  }
+  const isAdmin = user?.role === 'ops_admin' || user?.role === 'admin';
+  const displayState = !user ? 'auth' : isAdmin ? 'admin' : 'customer';
+
+  // Single NavigationContainer with conditional navigator rendering
+  // The key prop forces complete remount when logoutCounter changes
+  // This ensures navigation state is completely reset on logout
+  return (
+    <NavigationContainer key={`nav-${displayState}-${logoutCounter}`}>
+      {displayState === 'auth' && <AuthNavigatorComponent />}
+      {displayState === 'customer' && <CustomerNavigatorComponent />}
+      {displayState === 'admin' && <AdminNavigatorComponent />}
+    </NavigationContainer>
+  );
 }
 
 export default function App() {
@@ -202,7 +123,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <CartProvider>
-          <AppNavigator />
+          <RootNavigator />
         </CartProvider>
       </AuthProvider>
     </ErrorBoundary>
@@ -210,12 +131,6 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -227,33 +142,5 @@ const styles = StyleSheet.create({
     color: '#8B5CF6',
     fontWeight: '600',
     marginTop: 16,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 24,
-  },
-  errorText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#EF4444',
-    marginBottom: 16,
-  },
-  errorDetail: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  text: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 10,
-  },
-  subtext: {
-    fontSize: 16,
-    color: '#6B7280',
   },
 });

@@ -22,7 +22,7 @@ async def connect_to_mongo():
         
         print(f"✓ Connected to MongoDB: {settings.database_name}")
         print(f"✓ Database: {settings.database_name}")
-        print(f"✓ Collections initialized: users, products, orders")
+        print(f"✓ Collections initialized: users, products, orders, token_blacklist")
     except Exception as e:
         print(f"✗ Error connecting to MongoDB: {e}")
         raise
@@ -48,6 +48,11 @@ async def initialize_collections():
     await orders_collection.create_index("customer_id")
     await orders_collection.create_index("order_status")
     await orders_collection.create_index("created_at")
+    
+    # Token blacklist collection
+    token_blacklist_collection = db.database["token_blacklist"]
+    await token_blacklist_collection.create_index("token", unique=True)
+    await token_blacklist_collection.create_index("expires_at", expireAfterSeconds=0)
 
 
 async def close_mongo_connection():
@@ -66,3 +71,4 @@ def get_database():
 USERS_COLLECTION = "users"
 PRODUCTS_COLLECTION = "products"
 ORDERS_COLLECTION = "orders"
+TOKEN_BLACKLIST_COLLECTION = "token_blacklist"

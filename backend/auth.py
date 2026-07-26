@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from config import settings
 from models import TokenData
+from database import get_database, TOKEN_BLACKLIST_COLLECTION
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -46,6 +47,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     )
     
     try:
+        # Check if token is blacklisted
+        db = get_database()
+        token_blacklist_collection = db[TOKEN_BLACKLIST_COLLECTION]
+        blacklisted = await token_blacklist_collection.find_one({"token": token})
+        if blacklisted:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked. Please login again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         user_id: str = payload.get("sub")
         role: str = payload.get("role")

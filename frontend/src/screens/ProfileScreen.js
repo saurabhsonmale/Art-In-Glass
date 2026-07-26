@@ -6,23 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 export default function ProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            // Navigation will be handled automatically by App.js
-          }
-        }
-      ]
-    );
-  };
 
   const menuItems = [
     {
@@ -54,6 +37,31 @@ export default function ProfileScreen({ navigation }) {
       onPress: () => Alert.alert('Contact Us', 'Email: support@artinglass.com\nPhone: +91 98765 43210')
     },
   ];
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to log out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await logout();
+            if (!result.success) {
+              Alert.alert('Error', result.error || 'Failed to logout. Please try again.');
+            }
+            // Navigation will be handled by App.js based on auth state change
+          }
+        }
+      ],
+      { cancelable: true }
+    );
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -93,6 +101,18 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </View>
 
+      {/* Logout Button */}
+      <View style={styles.logoutSection}>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* App Info */}
       <View style={styles.appInfoSection}>
         <Text style={styles.appName}>Art In Glass</Text>
@@ -100,13 +120,6 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.appTagline}>Custom Resin Art</Text>
       </View>
 
-      {/* Logout Button */}
-      <View style={styles.logoutSection}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
     </ScrollView>
   );
 }
@@ -224,22 +237,24 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   logoutSection: {
+    marginTop: 24,
     paddingHorizontal: 24,
-    marginTop: 32,
-    marginBottom: 40,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FEE2E2',
-    borderRadius: 12,
     paddingVertical: 16,
-    gap: 8,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    gap: 12,
   },
-  logoutText: {
+  logoutButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#EF4444',
   },
 });
