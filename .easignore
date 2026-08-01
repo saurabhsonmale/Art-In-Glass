@@ -1,0 +1,17 @@
+# Do NOT list backend/ here.
+# On Windows/OneDrive, EAS fails with EPERM when it tries to rmdir
+# ignored folders from the git shallow-clone temp directory.
+# Extra backend files in the upload are unused by the Android build.
+
+node_modules/
+.expo/
+dist/
+web-build/
+.git/
+**/__pycache__/
+**/*.pyc
+*.log
+.DS_Store
+.env
+.env.*
+.cursor/

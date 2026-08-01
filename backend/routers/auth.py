@@ -188,35 +188,63 @@ async def get_current_user_info(current_user = Depends(get_current_active_user))
 
 @router.post("/logout", response_model=Dict[str, str])
 async def logout(current_user = Depends(get_current_user), token: str = Depends(oauth2_scheme)):
-    """Logout user and invalidate token"""
+    """
+    Logout for every RBAC role (customer, admin, ops_admin).
+    Invalidates the current JWT via blacklist. No role restriction.
+    """
     try:
         db = get_database()
         token_blacklist_collection = db[TOKEN_BLACKLIST_COLLECTION]
-        
-        # Decode token to get expiration time
+
+        # Role comes from JWT (customer | admin | ops_admin)
+        role = getattr(current_user, "role", None) or "customer"
+        if isinstance(role, str):
+            role = role.strip().lower()
+
+        allowed_roles = {"customer", "admin", "ops_admin"}
+        if role not in allowed_roles:
+            # Still allow logout so the client can clear session
+            role = "unknown"
+
         try:
-            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+            payload = jwt.decode(
+                token,
+                settings.jwt_secret_key,
+                algorithms=[settings.jwt_algorithm],
+            )
             exp_timestamp = payload.get("exp")
-            
-            if exp_timestamp:
-                # Calculate when the token expires
-                expires_at = datetime.utcfromtimestamp(exp_timestamp)
-                
-                # Add token to blacklist
+            # Prefer role claim from token when present
+            token_role = payload.get("role")
+            if isinstance(token_role, str) and token_role.strip().lower() in allowed_roles:
+                role = token_role.strip().lower()
+
+            expires_at = (
+                datetime.utcfromtimestamp(exp_timestamp)
+                if exp_timestamp
+                else datetime.utcnow() + timedelta(hours=24)
+            )
+
+            # Idempotent blacklist: ignore duplicate token inserts
+            existing = await token_blacklist_collection.find_one({"token": token})
+            if not existing:
                 await token_blacklist_collection.insert_one({
                     "token": token,
                     "user_id": current_user.user_id,
+                    "role": role,
                     "expires_at": expires_at,
-                    "created_at": datetime.utcnow()
+                    "created_at": datetime.utcnow(),
                 })
         except JWTError:
-            # If we can't decode the token, still return success (client-side cleanup will handle it)
+            # Client-side cleanup still proceeds; return success
             pass
-        
+
         return {
             "message": "Logged out successfully",
-            "status": "success"
+            "status": "success",
+            "role": role,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

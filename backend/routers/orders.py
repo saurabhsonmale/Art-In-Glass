@@ -1,12 +1,33 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from database import get_database, ORDERS_COLLECTION, USERS_COLLECTION
-from models import OrderCreate, OrderResponse, OrderItem
-from auth import get_current_active_user
+from models import (
+    OrderCreate,
+    OrderStatusUpdate,
+    ORDER_STATUSES,
+    ORDER_STATUS_TRANSITIONS,
+)
+from auth import get_current_active_user, require_any_role
 from bson import ObjectId
 from typing import List, Dict, Any
 from datetime import datetime
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
+
+
+def _serialize_order(order: dict) -> Dict[str, Any]:
+    """Convert a MongoDB order document to API response format."""
+    return {
+        "id": str(order["_id"]),
+        "customer_id": str(order["customer_id"]),
+        "items": order["items"],
+        "total_amount": order["total_amount"],
+        "shipping_address": order["shipping_address"],
+        "payment_method": order.get("payment_method", "cod"),
+        "order_status": order["order_status"],
+        "tracking_details": order.get("tracking_details"),
+        "created_at": order["created_at"],
+        "updated_at": order.get("updated_at", order["created_at"]),
+    }
 
 
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
@@ -34,8 +55,9 @@ async def create_order(order_data: OrderCreate, current_user = Depends(get_curre
             "method": order_data.payment_method or "cod",
             "status": "PENDING"
         }
-        order_dict["created_at"] = None  # Will use default
-        order_dict["updated_at"] = None  # Will use default
+        now = datetime.utcnow()
+        order_dict["created_at"] = now
+        order_dict["updated_at"] = now
         
         # Insert order
         result = await orders_collection.insert_one(order_dict)
@@ -43,18 +65,7 @@ async def create_order(order_data: OrderCreate, current_user = Depends(get_curre
         # Get created order
         created_order = await orders_collection.find_one({"_id": result.inserted_id})
         
-        return {
-            "id": str(created_order["_id"]),
-            "customer_id": str(created_order["customer_id"]),
-            "items": created_order["items"],
-            "total_amount": created_order["total_amount"],
-            "shipping_address": created_order["shipping_address"],
-            "payment_method": created_order.get("payment_method", "cod"),
-            "order_status": created_order["order_status"],
-            "tracking_details": created_order.get("tracking_details"),
-            "created_at": created_order["created_at"],
-            "updated_at": created_order["updated_at"]
-        }
+        return _serialize_order(created_order)
     
     except HTTPException:
         raise
@@ -76,27 +87,104 @@ async def get_my_orders(current_user = Depends(get_current_active_user)):
         orders_cursor = orders_collection.find({"customer_id": current_user.user_id}).sort("created_at", -1)
         orders = await orders_cursor.to_list(length=None)
         
-        # Convert to response format
-        result = []
-        for order in orders:
-            result.append({
-                "id": str(order["_id"]),
-                "customer_id": str(order["customer_id"]),
-                "items": order["items"],
-                "total_amount": order["total_amount"],
-                "shipping_address": order["shipping_address"],
-                "order_status": order["order_status"],
-                "tracking_details": order.get("tracking_details"),
-                "created_at": order["created_at"],
-                "updated_at": order["updated_at"]
-            })
-        
-        return result
+        return [_serialize_order(order) for order in orders]
     
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch orders: {str(e)}"
+        )
+
+
+@router.get("", response_model=List[Dict[str, Any]])
+async def get_all_orders_admin(
+    current_user=Depends(require_any_role(["ops_admin", "admin"]))
+):
+    """Fetch all orders (Ops Admin only)"""
+    try:
+        db = get_database()
+        orders_collection = db[ORDERS_COLLECTION]
+
+        orders_cursor = orders_collection.find({}).sort("created_at", -1)
+        orders = await orders_cursor.to_list(length=None)
+
+        return [_serialize_order(order) for order in orders]
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch orders: {str(e)}"
+        )
+
+
+@router.put("/{order_id}/status", response_model=Dict[str, Any])
+async def update_order_status_admin(
+    order_id: str,
+    status_update: OrderStatusUpdate,
+    current_user=Depends(require_any_role(["ops_admin", "admin"]))
+):
+    """Update order status (Ops Admin only)"""
+    try:
+        if not ObjectId.is_valid(order_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid order ID"
+            )
+
+        new_status = status_update.order_status
+        if new_status not in ORDER_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {', '.join(ORDER_STATUSES)}"
+            )
+
+        db = get_database()
+        orders_collection = db[ORDERS_COLLECTION]
+
+        order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Order not found"
+            )
+
+        current_status = order["order_status"]
+        allowed = ORDER_STATUS_TRANSITIONS.get(current_status, [])
+        if new_status not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot transition from {current_status} to {new_status}"
+            )
+
+        update_data = {
+            "order_status": new_status,
+            "updated_at": datetime.utcnow(),
+        }
+
+        if status_update.tracking_details:
+            update_data["tracking_details"] = status_update.tracking_details.dict()
+
+        if new_status == "DISPATCHED" and not order.get("tracking_details") and not status_update.tracking_details:
+            update_data["tracking_details"] = {
+                "courier_name": "Standard Delivery",
+                "tracking_number": f"AIG-{order_id[-8:].upper()}",
+                "dispatch_date": datetime.utcnow().isoformat(),
+            }
+
+        await orders_collection.update_one(
+            {"_id": ObjectId(order_id)},
+            {"$set": update_data}
+        )
+
+        updated_order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+        return _serialize_order(updated_order)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update order status: {str(e)}"
         )
 
 
@@ -129,13 +217,7 @@ async def track_order(order_id: str, current_user = Depends(get_current_active_u
                 detail="Access denied. This order does not belong to you"
             )
         
-        return {
-            "id": str(order["_id"]),
-            "order_status": order["order_status"],
-            "tracking_details": order.get("tracking_details"),
-            "created_at": order["created_at"],
-            "updated_at": order["updated_at"]
-        }
+        return _serialize_order(order)
     
     except HTTPException:
         raise
@@ -175,17 +257,7 @@ async def get_order_by_id(order_id: str, current_user = Depends(get_current_acti
                 detail="Access denied. This order does not belong to you"
             )
         
-        return {
-            "id": str(order["_id"]),
-            "customer_id": str(order["customer_id"]),
-            "items": order["items"],
-            "total_amount": order["total_amount"],
-            "shipping_address": order["shipping_address"],
-            "order_status": order["order_status"],
-            "tracking_details": order.get("tracking_details"),
-            "created_at": order["created_at"],
-            "updated_at": order["updated_at"]
-        }
+        return _serialize_order(order)
     
     except HTTPException:
         raise

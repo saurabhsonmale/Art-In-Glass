@@ -18,7 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+import { API_BASE_URL } from '../../config/api';
 
 const categories = [
   { id: '1', name: 'Keychains' },
@@ -105,14 +105,24 @@ export default function AddProductScreen({ navigation }) {
         category,
         images: images,
         is_customizable: isCustomizable,
-        requires_photo: requiresPhoto,
-        available_colors: selectedColors,
-        estimated_days: parseInt(estimatedDays),
+        customization_options: {
+          text_enabled: isCustomizable,
+          photo_required: requiresPhoto,
+          color_shades: selectedColors.map((colorName) => {
+            const colorOption = colorOptions.find((c) => c.name === colorName);
+            return {
+              id: colorOption?.id || colorName,
+              name: colorName,
+              value: colorOption?.color || '#8B5CF6',
+            };
+          }),
+        },
+        estimated_days: parseInt(estimatedDays, 10),
       };
 
       const token = await AsyncStorage.getItem('token');
       const response = await axios.post(
-        `${API_BASE_URL}/admin/products`,
+        `${API_BASE_URL}/products/admin/products`,
         productData,
         {
           headers: {

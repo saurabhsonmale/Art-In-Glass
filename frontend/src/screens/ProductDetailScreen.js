@@ -6,7 +6,7 @@ import { useCart } from '../context/CartContext';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+import { API_BASE_URL } from '../config/api';
 
 export default function ProductDetailScreen({ route, navigation }) {
   const { product } = route.params;

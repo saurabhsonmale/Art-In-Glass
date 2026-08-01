@@ -159,6 +159,34 @@ class OrderResponse(OrderBase):
         json_encoders = {ObjectId: str}
 
 
+# Valid order statuses (shared across admin and customer flows)
+ORDER_STATUSES = [
+    "PENDING",
+    "ACCEPTED",
+    "IN_PRODUCTION",
+    "PACKED",
+    "DISPATCHED",
+    "DELIVERED",
+    "CANCELLED",
+]
+
+# Allowed admin status transitions
+ORDER_STATUS_TRANSITIONS = {
+    "PENDING": ["ACCEPTED", "CANCELLED"],
+    "ACCEPTED": ["IN_PRODUCTION", "CANCELLED"],
+    "IN_PRODUCTION": ["PACKED", "CANCELLED"],
+    "PACKED": ["DISPATCHED", "CANCELLED"],
+    "DISPATCHED": ["DELIVERED"],
+    "DELIVERED": [],
+    "CANCELLED": [],
+}
+
+
+class OrderStatusUpdate(BaseModel):
+    order_status: str
+    tracking_details: Optional[TrackingDetails] = None
+
+
 # Token Models
 class Token(BaseModel):
     access_token: str

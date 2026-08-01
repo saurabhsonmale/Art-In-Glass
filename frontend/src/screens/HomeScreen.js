@@ -7,7 +7,7 @@ import { useCart } from '../context/CartContext';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+import { API_BASE_URL } from '../config/api';
 
 const categories = [
   { id: '1', name: 'Keychains', icon: 'key-outline', color: '#8B5CF6' },

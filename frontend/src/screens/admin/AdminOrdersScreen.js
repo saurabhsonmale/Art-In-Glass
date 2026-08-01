@@ -2,15 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../../config/api';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const STATUS_FLOW = [
+  { from: 'PENDING', to: 'ACCEPTED', label: 'Accept Order' },
+  { from: 'ACCEPTED', to: 'IN_PRODUCTION', label: 'Start Production' },
+  { from: 'IN_PRODUCTION', to: 'PACKED', label: 'Mark Packed' },
+  { from: 'PACKED', to: 'DISPATCHED', label: 'Dispatch' },
+  { from: 'DISPATCHED', to: 'DELIVERED', label: 'Mark Delivered' },
+];
 
-export default function AdminOrdersScreen({ navigation }) {
+export default function AdminOrdersScreen() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { user } = useAuth();
+  const { token } = useAuth();
 
   useEffect(() => {
     fetchOrders();
@@ -18,7 +24,6 @@ export default function AdminOrdersScreen({ navigation }) {
 
   const fetchOrders = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/orders`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -41,7 +46,6 @@ export default function AdminOrdersScreen({ navigation }) {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const token = await AsyncStorage.getItem('token');
       await axios.put(
         `${API_BASE_URL}/orders/${orderId}/status`,
         { order_status: newStatus },
@@ -51,24 +55,30 @@ export default function AdminOrdersScreen({ navigation }) {
           },
         }
       );
-      
-      Alert.alert('Success', `Order marked as ${newStatus}`);
+
+      Alert.alert('Success', `Order marked as ${newStatus.replace('_', ' ')}`);
       fetchOrders();
     } catch (error) {
       console.error('Error updating order:', error);
-      Alert.alert('Error', 'Failed to update order status');
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to update order status');
     }
+  };
+
+  const getNextAction = (status) => {
+    return STATUS_FLOW.find((step) => step.from === status);
   };
 
   const getStatusColor = (status) => {
     switch (status) {
       case 'PENDING':
         return '#F59E0B';
-      case 'CONFIRMED':
+      case 'ACCEPTED':
         return '#3B82F6';
-      case 'PROCESSING':
+      case 'IN_PRODUCTION':
         return '#8B5CF6';
-      case 'SHIPPED':
+      case 'PACKED':
+        return '#EC4899';
+      case 'DISPATCHED':
         return '#10B981';
       case 'DELIVERED':
         return '#059669';
@@ -79,89 +89,71 @@ export default function AdminOrdersScreen({ navigation }) {
     }
   };
 
-  const renderOrder = ({ item }) => (
-    <View style={styles.orderCard}>
-      <View style={styles.orderHeader}>
-        <View>
-          <Text style={styles.orderId}>Order #{item.id.slice(-8).toUpperCase()}</Text>
-          <Text style={styles.orderDate}>
-            {new Date(item.created_at).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            })}
-          </Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.order_status) + '20' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(item.order_status) }]}>
-            {item.order_status}
-          </Text>
-        </View>
-      </View>
+  const renderOrder = ({ item }) => {
+    const nextAction = getNextAction(item.order_status);
 
-      <View style={styles.orderItems}>
-        {item.items.map((orderItem, index) => (
-          <View key={index} style={styles.orderItem}>
-            <Text style={styles.itemTitle}>{orderItem.title}</Text>
-            <Text style={styles.itemDetails}>
-              Qty: {orderItem.quantity} × ₹{orderItem.price.toFixed(2)}
+    return (
+      <View style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <View>
+            <Text style={styles.orderId}>Order #{item.id.slice(-8).toUpperCase()}</Text>
+            <Text style={styles.orderDate}>
+              {new Date(item.created_at).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}
             </Text>
           </View>
-        ))}
-      </View>
-
-      <View style={styles.orderFooter}>
-        <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Total Amount:</Text>
-          <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.order_status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.order_status) }]}>
+              {item.order_status.replace('_', ' ')}
+            </Text>
+          </View>
         </View>
-        
-        {item.order_status === 'PENDING' && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.confirmButton]}
-              onPress={() => updateOrderStatus(item.id, 'CONFIRMED')}
-            >
-              <Text style={styles.confirmButtonText}>Confirm</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {item.order_status === 'CONFIRMED' && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.processButton]}
-              onPress={() => updateOrderStatus(item.id, 'PROCESSING')}
-            >
-              <Text style={styles.processButtonText}>Start Processing</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {item.order_status === 'PROCESSING' && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.shipButton]}
-              onPress={() => updateOrderStatus(item.id, 'SHIPPED')}
-            >
-              <Text style={styles.shipButtonText}>Mark Shipped</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
 
-      <View style={styles.shippingInfo}>
-        <Text style={styles.shippingLabel}>Shipping To:</Text>
-        <Text style={styles.shippingText}>
-          {item.shipping_address.street}, {item.shipping_address.city}
-        </Text>
-        <Text style={styles.shippingText}>
-          {item.shipping_address.state} - {item.shipping_address.zipcode}
-        </Text>
-        <Text style={styles.shippingText}>Phone: {item.shipping_address.phone}</Text>
+        <View style={styles.orderItems}>
+          {item.items.map((orderItem, index) => (
+            <View key={index} style={styles.orderItem}>
+              <Text style={styles.itemTitle}>{orderItem.title}</Text>
+              <Text style={styles.itemDetails}>
+                Qty: {orderItem.quantity} × ₹{orderItem.price.toFixed(2)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.orderFooter}>
+          <View style={styles.totalContainer}>
+            <Text style={styles.totalLabel}>Total Amount:</Text>
+            <Text style={styles.totalAmount}>₹{item.total_amount.toFixed(2)}</Text>
+          </View>
+
+          {nextAction && (
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.confirmButton]}
+                onPress={() => updateOrderStatus(item.id, nextAction.to)}
+              >
+                <Text style={styles.confirmButtonText}>{nextAction.label}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.shippingInfo}>
+          <Text style={styles.shippingLabel}>Shipping To:</Text>
+          <Text style={styles.shippingText}>
+            {item.shipping_address.street}, {item.shipping_address.city}
+          </Text>
+          <Text style={styles.shippingText}>
+            {item.shipping_address.state} - {item.shipping_address.zipcode}
+          </Text>
+          <Text style={styles.shippingText}>Phone: {item.shipping_address.phone}</Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -324,22 +316,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#8B5CF6',
   },
   confirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  processButton: {
-    backgroundColor: '#3B82F6',
-  },
-  processButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  shipButton: {
-    backgroundColor: '#10B981',
-  },
-  shipButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',

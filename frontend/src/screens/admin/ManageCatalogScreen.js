@@ -4,7 +4,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+import { API_BASE_URL } from '../../config/api';
 
 export default function ManageCatalogScreen({ navigation }) {
   const [products, setProducts] = useState([]);
@@ -46,7 +46,7 @@ export default function ManageCatalogScreen({ navigation }) {
     try {
       const token = await AsyncStorage.getItem('token');
       await axios.delete(
-        `${API_BASE_URL}/admin/products/${selectedProduct.id}`,
+        `${API_BASE_URL}/products/admin/products/${selectedProduct.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

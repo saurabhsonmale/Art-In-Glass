@@ -4,6 +4,7 @@ from models import ProductCreate, ProductResponse
 from auth import get_current_active_user, require_any_role
 from bson import ObjectId
 from typing import List, Dict, Any
+from datetime import datetime
 
 router = APIRouter(prefix="/api/v1/products", tags=["products"])
 
@@ -145,7 +146,7 @@ async def create_product_admin(
         # Create product document with is_active=True by default
         product_dict = product_data.dict()
         product_dict["is_active"] = True
-        product_dict["created_at"] = None  # Will use MongoDB default
+        product_dict["created_at"] = datetime.utcnow()
         
         # Insert product
         result = await products_collection.insert_one(product_dict)

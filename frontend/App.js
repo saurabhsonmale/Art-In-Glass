@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider } from './src/context/CartContext';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { resolveAuthDisplayState } from './src/config/roles';
 
 // Auth Screens
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -90,9 +91,9 @@ function AuthNavigatorComponent() {
   return <AuthNavigator />;
 }
 
-// Root navigator - conditionally renders based on auth state
+// Root navigator - RBAC: auth | customer | admin (admin + ops_admin)
 function RootNavigator() {
-  const { user, loading, logoutCounter } = useAuth();
+  const { user, loading, logoutCounter, displayState: authDisplayState } = useAuth();
 
   if (loading) {
     return (
@@ -103,17 +104,14 @@ function RootNavigator() {
     );
   }
 
-  const isAdmin = user?.role === 'ops_admin' || user?.role === 'admin';
-  const displayState = !user ? 'auth' : isAdmin ? 'admin' : 'customer';
+  const displayState = authDisplayState || resolveAuthDisplayState(user);
 
-  // Single NavigationContainer with conditional navigator rendering
-  // The key prop forces complete remount when logoutCounter changes
-  // This ensures navigation state is completely reset on logout
+  // key remounts navigator on role change / logout so stacks never leak across roles
   return (
     <NavigationContainer key={`nav-${displayState}-${logoutCounter}`}>
-      {displayState === 'auth' && <AuthNavigatorComponent />}
-      {displayState === 'customer' && <CustomerNavigatorComponent />}
-      {displayState === 'admin' && <AdminNavigatorComponent />}
+      {displayState === 'auth' ? <AuthNavigatorComponent /> : null}
+      {displayState === 'customer' ? <CustomerNavigatorComponent /> : null}
+      {displayState === 'admin' ? <AdminNavigatorComponent /> : null}
     </NavigationContainer>
   );
 }

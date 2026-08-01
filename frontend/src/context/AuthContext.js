@@ -1,8 +1,17 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+import {
+  normalizeRole,
+  isAdminRole,
+  isCustomerRole,
+  resolveAuthDisplayState,
+  ALL_ROLES,
+} from '../config/roles';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const AUTH_TOKEN_KEY = 'token';
+const AUTH_USER_KEY = 'user';
 
 const AuthContext = createContext();
 
@@ -14,40 +23,55 @@ export const useAuth = () => {
   return context;
 };
 
+async function clearAuthStorage() {
+  try {
+    await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USER_KEY]);
+  } catch (_) {
+    await AsyncStorage.removeItem(AUTH_TOKEN_KEY).catch(() => {});
+    await AsyncStorage.removeItem(AUTH_USER_KEY).catch(() => {});
+  }
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
-  // Force re-render counter - increments on logout to force NavigationContainer remount
+  const [loggingOut, setLoggingOut] = useState(false);
+  // Increments on logout to force NavigationContainer remount / reset
   const [logoutCounter, setLogoutCounter] = useState(0);
 
-  // Configure axios defaults
   useEffect(() => {
     axios.defaults.baseURL = API_BASE_URL;
   }, []);
 
-  // Check for stored token on app start
   useEffect(() => {
     checkStoredToken();
   }, []);
 
   const checkStoredToken = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      const storedToken = await AsyncStorage.getItem('token');
-      const storedUser = await AsyncStorage.getItem('user');
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+      const storedUser = await AsyncStorage.getItem(AUTH_USER_KEY);
+
       if (storedToken && storedUser) {
         try {
           const userData = JSON.parse(storedUser);
-          setToken(storedToken);
-          setUser(userData);
-          axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          const role = normalizeRole(userData?.role);
+
+          // Drop sessions with unknown/missing roles (RBAC safety)
+          if (!role || !ALL_ROLES.includes(role)) {
+            await clearAuthStorage();
+          } else {
+            const normalizedUser = { ...userData, role };
+            setToken(storedToken);
+            setUser(normalizedUser);
+            axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          }
         } catch (parseError) {
           console.error('Error parsing stored user data:', parseError);
-          await AsyncStorage.removeItem('token');
-          await AsyncStorage.removeItem('user');
+          await clearAuthStorage();
         }
       }
     } catch (error) {
@@ -57,7 +81,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Safety timeout
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (loading) {
@@ -68,6 +91,27 @@ export const AuthProvider = ({ children }) => {
     return () => clearTimeout(timeout);
   }, [loading]);
 
+  const applySession = async (accessToken, userData) => {
+    const role = normalizeRole(userData?.role) || 'customer';
+    const normalizedUser = { ...userData, role };
+
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, accessToken);
+    await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(normalizedUser));
+
+    setToken(accessToken);
+    setUser(normalizedUser);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+
+    return normalizedUser;
+  };
+
+  const clearSessionLocally = useCallback(() => {
+    delete axios.defaults.headers.common['Authorization'];
+    setUser(null);
+    setToken(null);
+    setLogoutCounter((prev) => prev + 1);
+  }, []);
+
   const login = async (email, password) => {
     try {
       const response = await axios.post('/auth/login', {
@@ -75,29 +119,21 @@ export const AuthProvider = ({ children }) => {
         password,
       });
 
-      const { access_token, user_id, role } = response.data;
-      
+      const { access_token } = response.data;
+
       const userResponse = await axios.get('/auth/me', {
         headers: {
           Authorization: `Bearer ${access_token}`,
         },
       });
 
-      const userData = userResponse.data;
-      
-      await AsyncStorage.setItem('token', access_token);
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-      
-      setToken(access_token);
-      setUser(userData);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-
+      const userData = await applySession(access_token, userResponse.data);
       return { success: true, user: userData };
     } catch (error) {
       console.error('Login error:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.detail || 'Login failed' 
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Login failed',
       };
     }
   };
@@ -106,100 +142,94 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.post('/auth/register', userData);
       const loginResult = await login(userData.email, userData.password);
-      
+
       if (loginResult.success) {
         return { success: true, data: response.data, user: loginResult.user };
-      } else {
-        return { 
-          success: true, 
-          data: response.data, 
-          message: 'Registration successful! Please login.',
-          autoLoginFailed: true
-        };
       }
+
+      return {
+        success: true,
+        data: response.data,
+        message: 'Registration successful! Please login.',
+        autoLoginFailed: true,
+      };
     } catch (error) {
       console.error('Register error:', error);
-      return { 
-        success: false, 
-        error: error.response?.data?.detail || 'Registration failed' 
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Registration failed',
       };
     }
   };
 
-  const logout = async () => {
-    try {
-      console.log('🔵 AuthContext: Starting logout...');
-      
-      // 1. Save token before clearing anything (for API call)
-      const savedToken = await AsyncStorage.getItem('token');
-      console.log('🔵 AuthContext: Token from storage:', savedToken ? 'YES' : 'NO');
-      
-      // 2. Call logout API FIRST with valid token (before clearing)
-      // This is critical - we must call the API while we still have the token
-      let apiSuccess = false;
-      if (savedToken) {
-        try {
-          console.log('🔵 AuthContext: Making POST to /auth/logout');
-          console.log('🔵 AuthContext: With token:', savedToken.substring(0, 20) + '...');
-          
-          const response = await axios.post('/auth/logout', {}, {
-            headers: { 
-              Authorization: `Bearer ${savedToken}` 
-            },
-            timeout: 5000
-          });
-          
-          console.log('✅ AuthContext: Logout API responded:', response.status);
-          console.log('✅ AuthContext: Response data:', response.data);
-          apiSuccess = true;
-        } catch (apiError) {
-          console.error('⚠️ AuthContext: Logout API error:', apiError.message);
-          if (apiError.response) {
-            console.error('⚠️ AuthContext: Response status:', apiError.response.status);
-            console.error('⚠️ AuthContext: Response data:', apiError.response.data);
-          }
-          // Continue with logout even if API call fails
-        }
-      } else {
-        console.warn('⚠️ AuthContext: No token found in storage');
+  /**
+   * Logout for every RBAC role (customer | admin | ops_admin).
+   * Always clears local session first so navigation returns to login.
+   */
+  const logout = useCallback(
+    async (options = {}) => {
+      if (loggingOut) {
+        return { success: true, alreadyLoggingOut: true };
       }
-      
-      // 3. Clear stored data
+
+      setLoggingOut(true);
+
+      const role = normalizeRole(options.role || user?.role);
+      let savedToken = token;
+
       try {
-        await AsyncStorage.removeItem('token');
-        await AsyncStorage.removeItem('user');
-        console.log('🔵 AuthContext: AsyncStorage cleared');
-      } catch (storageError) {
-        console.error('Storage clear error:', storageError);
+        if (!savedToken) {
+          savedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+        }
+      } catch (storageReadError) {
+        console.warn('Could not read token during logout:', storageReadError);
       }
-      
-      // 4. Clear auth header from axios defaults
-      delete axios.defaults.headers.common['Authorization'];
-      
-      // 5. Reset state - this triggers navigation remount via the key prop
-      setUser(null);
-      setToken(null);
-      setLogoutCounter(prev => prev + 1);
-      console.log('🔵 AuthContext: State reset, logoutCounter incremented');
-      
-      return { 
-        success: true, 
-        apiSuccess 
-      };
-    } catch (error) {
-      console.error('❌ AuthContext: Logout error:', error);
-      return { 
-        success: false, 
-        error: 'Failed to logout. Please try again.' 
-      };
-    }
-  };
+
+      // 1) Clear local auth immediately (all roles)
+      clearSessionLocally();
+
+      // 2) Persist clear
+      await clearAuthStorage();
+
+      // 3) Best-effort server revoke (works for all roles; never blocks UI)
+      if (savedToken) {
+        axios
+          .post(
+            '/auth/logout',
+            {},
+            {
+              headers: { Authorization: `Bearer ${savedToken}` },
+              timeout: 5000,
+            }
+          )
+          .catch((apiError) => {
+            console.warn(
+              `Logout API error for role=${role || 'unknown'} (local session already cleared):`,
+              apiError.message
+            );
+          });
+      }
+
+      setLoggingOut(false);
+      return { success: true, role: role || null };
+    },
+    [loggingOut, token, user, clearSessionLocally]
+  );
+
+  const role = normalizeRole(user?.role);
+  const displayState = resolveAuthDisplayState(user);
 
   const value = {
     user,
     token,
     loading,
+    loggingOut,
     logoutCounter,
+    role,
+    isAdmin: isAdminRole(role),
+    isCustomer: isCustomerRole(role),
+    isAuthenticated: !!user && !!role,
+    displayState,
     login,
     register,
     logout,

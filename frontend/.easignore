@@ -1,4 +1,11 @@
+# Local frontend ignores for non-VCS / package archive.
+# Avoid ignoring ../backend — Windows EPERM on rmdir breaks EAS upload.
+
 node_modules/
-.git/
 .expo/
 dist/
+web-build/
+.git/
+*.log
+.DS_Store
+npm-debug.*

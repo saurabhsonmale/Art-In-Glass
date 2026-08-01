@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+import { API_BASE_URL } from '../config/api';
 
 export default function CheckoutScreen({ route, navigation }) {
   const { items, total_amount } = route.params || { items: [], total_amount: 0 };

@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import LogoutIcon from '../components/LogoutIcon';
 
 export default function ProfileScreen({ navigation }) {
-  const { user, logout } = useAuth();
-
+  const { user } = useAuth();
 
   const menuItems = [
     {
@@ -38,35 +38,14 @@ export default function ProfileScreen({ navigation }) {
     },
   ];
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to log out?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await logout();
-            if (!result.success) {
-              Alert.alert('Error', result.error || 'Failed to logout. Please try again.');
-            }
-            // Navigation will be handled by App.js based on auth state change
-          }
-        }
-      ],
-      { cancelable: true }
-    );
-  };
-
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Profile Header */}
       <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerSpacer} />
+          <LogoutIcon />
+        </View>
+
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -81,7 +60,6 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Menu Items */}
       <View style={styles.menuSection}>
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.menuCard}>
@@ -101,25 +79,11 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Logout Button */}
-      <View style={styles.logoutSection}>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* App Info */}
       <View style={styles.appInfoSection}>
         <Text style={styles.appName}>Art In Glass</Text>
         <Text style={styles.appVersion}>Version 1.0.0</Text>
         <Text style={styles.appTagline}>Custom Resin Art</Text>
       </View>
-
     </ScrollView>
   );
 }
@@ -131,11 +95,21 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 52,
     paddingBottom: 40,
+    paddingHorizontal: 20,
     backgroundColor: '#8B5CF6',
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+  },
+  headerTop: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+  },
+  headerSpacer: {
+    flex: 1,
   },
   avatarContainer: {
     marginBottom: 16,
@@ -147,7 +121,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)',
     elevation: 5,
   },
   avatarText: {
@@ -191,7 +164,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   menuItem: {
@@ -218,6 +190,7 @@ const styles = StyleSheet.create({
   appInfoSection: {
     alignItems: 'center',
     marginTop: 40,
+    marginBottom: 32,
     paddingHorizontal: 24,
   },
   appName: {
@@ -235,26 +208,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     fontStyle: 'italic',
-  },
-  logoutSection: {
-    marginTop: 24,
-    paddingHorizontal: 24,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    gap: 12,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#EF4444',
   },
 });

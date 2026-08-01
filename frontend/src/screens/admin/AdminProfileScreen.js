@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import LogoutIcon from '../../components/LogoutIcon';
 
 export default function AdminProfileScreen({ navigation }) {
-  const { user, logout } = useAuth();
-
+  const { user } = useAuth();
 
   const menuItems = [
     {
@@ -34,45 +34,25 @@ export default function AdminProfileScreen({ navigation }) {
     },
   ];
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to log out?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await logout();
-            if (result.success) {
-              // Navigation will automatically reset via AuthContext state change
-              console.log('Logout successful');
-            } else {
-              Alert.alert('Error', result.error || 'Failed to logout. Please try again.');
-            }
-          }
-        }
-      ],
-      { cancelable: true }
-    );
-  };
-
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerSpacer} />
+          <LogoutIcon />
+        </View>
+
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
             <Ionicons name="person" size={48} color="#FFFFFF" />
           </View>
         </View>
-        <Text style={styles.name}>{user?.full_name || 'Ops Admin'}</Text>
+        <Text style={styles.name}>{user?.full_name || 'Admin'}</Text>
         <Text style={styles.email}>{user?.email || 'ops@artinglass.com'}</Text>
         <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>Operations Admin</Text>
+          <Text style={styles.roleText}>
+            {(user?.role || 'admin').replace('_', ' ').toUpperCase()}
+          </Text>
         </View>
       </View>
 
@@ -111,18 +91,6 @@ export default function AdminProfileScreen({ navigation }) {
         ))}
       </View>
 
-      {/* Logout Button */}
-      <View style={styles.logoutSection}>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-
       <Text style={styles.versionText}>Art In Glass - Ops Panel v1.0.0</Text>
     </ScrollView>
   );
@@ -135,12 +103,21 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#8B5CF6',
-    paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingTop: 52,
     paddingBottom: 40,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     alignItems: 'center',
+  },
+  headerTop: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+  },
+  headerSpacer: {
+    flex: 1,
   },
   avatarContainer: {
     marginBottom: 16,
@@ -190,7 +167,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   statValue: {
@@ -222,7 +198,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.05)',
     elevation: 1,
   },
   menuIconContainer: {
@@ -245,26 +220,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginBottom: 24,
-  },
-  logoutSection: {
-    marginTop: 24,
-    paddingHorizontal: 24,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    gap: 12,
-  },
-  logoutButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#EF4444',
   },
 });
