@@ -11,7 +11,6 @@
     },
     "preview": {
       "distribution": "internal",
-      "image": "sdk-50",
       "env": {
         "EXPO_PUBLIC_API_URL": "http://10.22.86.116:8000"
       },
@@ -20,8 +19,7 @@
       }
     },
     "production": {
-      "autoIncrement": true,
-      "image": "sdk-50"
+      "autoIncrement": true
     }
   },
   "submit": {
