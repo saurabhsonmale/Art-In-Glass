@@ -20,11 +20,11 @@ async def connect_to_mongo():
         # Initialize collections for Art In Glass project
         await initialize_collections()
         
-        print(f"✓ Connected to MongoDB: {settings.database_name}")
-        print(f"✓ Database: {settings.database_name}")
-        print(f"✓ Collections initialized: users, products, orders, token_blacklist")
+        print(f"[OK] Connected to MongoDB: {settings.database_name}")
+        print(f"[OK] Database: {settings.database_name}")
+        print(f"[OK] Collections initialized: users, products, orders, token_blacklist")
     except Exception as e:
-        print(f"✗ Error connecting to MongoDB: {e}")
+        print(f"[ERROR] Error connecting to MongoDB: {e}")
         raise
 
 

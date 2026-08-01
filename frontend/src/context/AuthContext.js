@@ -153,10 +153,19 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Login error:', error);
       const detail = error.response?.data?.detail;
-      return {
-        success: false,
-        error: typeof detail === 'string' ? detail : 'Login failed',
-      };
+      if (typeof detail === 'string') {
+        return { success: false, error: detail };
+      }
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        return { success: false, error: 'Server timeout. Is the backend running?' };
+      }
+      if (!error.response) {
+        return {
+          success: false,
+          error: `Cannot reach API (${API_BASE_URL}). Start the backend and check EXPO_PUBLIC_API_URL.`,
+        };
+      }
+      return { success: false, error: 'Login failed' };
     }
   };
 

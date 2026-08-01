@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
                 "password_hash": get_password_hash(admin_password),
             }
             result = await users_collection.insert_one(admin_data)
-            print("✓ Ops Admin user created successfully!")
+            print("[OK] Ops Admin user created successfully!")
             print(f"  Email: {admin_email}")
             print(f"  Password: {admin_password}")
             print(f"  Role: ops_admin")
@@ -68,15 +68,15 @@ async def lifespan(app: FastAPI):
                     {"_id": existing_admin["_id"]},
                     {"$set": repairs},
                 )
-                print("✓ Ops Admin credentials repaired")
+                print("[OK] Ops Admin credentials repaired")
             else:
-                print("✓ Ops Admin user ready")
+                print("[OK] Ops Admin user ready")
 
             print(f"  Email: {admin_email}")
             print(f"  Password: {admin_password}")
             print("  Role: ops_admin")
     except Exception as e:
-        print(f"✗ Error seeding admin user: {e}")
+        print(f"[ERROR] Error seeding admin user: {e}")
     
     yield
     # Shutdown
