@@ -22,9 +22,16 @@ SAMPLE_PRODUCTS = [
             "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=500&q=80"
         ],
         "is_customizable": True,
+        "is_active": True,
         "customization_options": {
             "has_text_input": True,
-            "color_shades": ["Ocean Blue", "Turquoise", "Deep Navy", "Aqua"],
+            "text_enabled": True,
+            "color_shades": [
+                {"id": "1", "name": "Ocean Blue", "value": "#3B82F6"},
+                {"id": "2", "name": "Turquoise", "value": "#14B8A6"},
+                {"id": "3", "name": "Deep Navy", "value": "#1E3A8A"},
+                {"id": "4", "name": "Aqua", "value": "#22D3EE"},
+            ],
             "photo_required": False
         },
         "rating": 4.8,
@@ -40,9 +47,16 @@ SAMPLE_PRODUCTS = [
             "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80"
         ],
         "is_customizable": True,
+        "is_active": True,
         "customization_options": {
             "has_text_input": False,
-            "color_shades": ["Deep Purple", "Cosmic Blue", "Midnight Black", "Starlight Silver"],
+            "text_enabled": False,
+            "color_shades": [
+                {"id": "1", "name": "Deep Purple", "value": "#6D28D9"},
+                {"id": "2", "name": "Cosmic Blue", "value": "#2563EB"},
+                {"id": "3", "name": "Midnight Black", "value": "#111827"},
+                {"id": "4", "name": "Starlight Silver", "value": "#9CA3AF"},
+            ],
             "photo_required": False
         },
         "rating": 4.9,
@@ -58,9 +72,16 @@ SAMPLE_PRODUCTS = [
             "https://images.unsplash.com/photo-1582719508461-905c673771fd?w=500&q=80"
         ],
         "is_customizable": True,
+        "is_active": True,
         "customization_options": {
             "has_text_input": True,
-            "color_shades": ["Rose Gold", "Gold", "Silver", "Rose Pink"],
+            "text_enabled": True,
+            "color_shades": [
+                {"id": "1", "name": "Rose Gold", "value": "#E11D48"},
+                {"id": "2", "name": "Gold", "value": "#F59E0B"},
+                {"id": "3", "name": "Silver", "value": "#9CA3AF"},
+                {"id": "4", "name": "Rose Pink", "value": "#EC4899"},
+            ],
             "photo_required": True
         },
         "rating": 4.7,
@@ -76,9 +97,16 @@ SAMPLE_PRODUCTS = [
             "https://images.unsplash.com/photo-1509048191080-d2984bad6ae5?w=500&q=80"
         ],
         "is_customizable": True,
+        "is_active": True,
         "customization_options": {
             "has_text_input": False,
-            "color_shades": ["Amethyst Purple", "Citrine Yellow", "Emerald Green", "Ruby Red"],
+            "text_enabled": False,
+            "color_shades": [
+                {"id": "1", "name": "Amethyst Purple", "value": "#8B5CF6"},
+                {"id": "2", "name": "Citrine Yellow", "value": "#EAB308"},
+                {"id": "3", "name": "Emerald Green", "value": "#10B981"},
+                {"id": "4", "name": "Ruby Red", "value": "#EF4444"},
+            ],
             "photo_required": False
         },
         "rating": 4.6,
@@ -94,9 +122,16 @@ SAMPLE_PRODUCTS = [
             "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=500&q=80"
         ],
         "is_customizable": True,
+        "is_active": True,
         "customization_options": {
             "has_text_input": True,
-            "color_shades": ["Pink Glitter", "Blue Ocean", "Green Forest", "Purple Dream"],
+            "text_enabled": True,
+            "color_shades": [
+                {"id": "1", "name": "Pink Glitter", "value": "#EC4899"},
+                {"id": "2", "name": "Blue Ocean", "value": "#3B82F6"},
+                {"id": "3", "name": "Green Forest", "value": "#10B981"},
+                {"id": "4", "name": "Purple Dream", "value": "#8B5CF6"},
+            ],
             "photo_required": False
         },
         "rating": 4.5,
@@ -112,9 +147,16 @@ SAMPLE_PRODUCTS = [
             "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&q=80"
         ],
         "is_customizable": True,
+        "is_active": True,
         "customization_options": {
             "has_text_input": False,
-            "color_shades": ["Crystal Blue", "Turquoise", "Deep Ocean", "Midnight Blue"],
+            "text_enabled": False,
+            "color_shades": [
+                {"id": "1", "name": "Crystal Blue", "value": "#38BDF8"},
+                {"id": "2", "name": "Turquoise", "value": "#14B8A6"},
+                {"id": "3", "name": "Deep Ocean", "value": "#1D4ED8"},
+                {"id": "4", "name": "Midnight Blue", "value": "#1E3A8A"},
+            ],
             "photo_required": False
         },
         "rating": 4.9,
@@ -126,11 +168,15 @@ SAMPLE_PRODUCTS = [
 async def seed_products():
     """Insert sample products into MongoDB"""
     try:
-        # Get MongoDB connection
-        mongodb_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-        db_name = os.getenv("DATABASE_NAME", "art_in_glass_db")
+        # Align with API settings (MONGODB_URI / resin_art_db)
+        mongodb_url = (
+            os.getenv("MONGODB_URI")
+            or os.getenv("MONGODB_URL")
+            or "mongodb://localhost:27017"
+        )
+        db_name = os.getenv("DATABASE_NAME", "resin_art_db")
         
-        print(f"Connecting to MongoDB at {mongodb_url}...")
+        print(f"Connecting to MongoDB at {mongodb_url} (db={db_name})...")
         client = AsyncIOMotorClient(mongodb_url)
         db = client[db_name]
         products_collection = db["products"]
@@ -150,9 +196,11 @@ async def seed_products():
         # Insert products
         print("🌱 Seeding products...")
         for product_data in SAMPLE_PRODUCTS:
-            product_data["created_at"] = datetime.utcnow()
-            result = await products_collection.insert_one(product_data)
-            print(f"✅ Added: {product_data['title']} (ID: {result.inserted_id})")
+            product = dict(product_data)
+            product["is_active"] = product.get("is_active", True)
+            product["created_at"] = datetime.utcnow()
+            result = await products_collection.insert_one(product)
+            print(f"✅ Added: {product['title']} (ID: {result.inserted_id})")
         
         # Verify
         count = await products_collection.count_documents({})

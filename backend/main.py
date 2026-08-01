@@ -1,11 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from database import connect_to_mongo, close_mongo_connection, get_database, USERS_COLLECTION
-from routers import auth, products, orders
+from database import (
+    connect_to_mongo,
+    close_mongo_connection,
+    get_database,
+    USERS_COLLECTION,
+    PRODUCTS_COLLECTION,
+)
+from routers import auth, products, orders, wishlist
 from auth import get_password_hash
-import os
+from datetime import datetime
 from config import settings
+
+
+DEFAULT_NOTIFICATION_PREFS = {
+    "order_updates": True,
+    "promotions": False,
+    "push_enabled": True,
+}
 
 
 @asynccontextmanager
@@ -13,6 +26,57 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
     await connect_to_mongo()
+
+    # Backfill legacy products missing is_active so they appear in the customer catalog
+    try:
+        db = get_database()
+        products_collection = db[PRODUCTS_COLLECTION]
+        repair_result = await products_collection.update_many(
+            {"is_active": {"$exists": False}},
+            {"$set": {"is_active": True}},
+        )
+        if repair_result.modified_count:
+            print(f"[OK] Activated {repair_result.modified_count} legacy product(s)")
+    except Exception as e:
+        print(f"[ERROR] Error repairing product is_active flags: {e}")
+
+    # Backfill profile fields on users missing them (safe, additive only)
+    try:
+        db = get_database()
+        users_collection = db[USERS_COLLECTION]
+        now = datetime.utcnow()
+        # notification_preferences
+        r1 = await users_collection.update_many(
+            {"notification_preferences": {"$exists": False}},
+            {"$set": {"notification_preferences": DEFAULT_NOTIFICATION_PREFS}},
+        )
+        r2 = await users_collection.update_many(
+            {"default_shipping_address": {"$exists": False}},
+            {"$set": {"default_shipping_address": None}},
+        )
+        r3 = await users_collection.update_many(
+            {"is_active": {"$exists": False}},
+            {"$set": {"is_active": True}},
+        )
+        r4 = await users_collection.update_many(
+            {"created_at": {"$exists": False}},
+            {"$set": {"created_at": now}},
+        )
+        r5 = await users_collection.update_many(
+            {"updated_at": {"$exists": False}},
+            {"$set": {"updated_at": now}},
+        )
+        patched = (
+            r1.modified_count
+            + r2.modified_count
+            + r3.modified_count
+            + r4.modified_count
+            + r5.modified_count
+        )
+        if patched:
+            print(f"[OK] Backfilled profile fields on users ({patched} field updates)")
+    except Exception as e:
+        print(f"[ERROR] Error backfilling user profile fields: {e}")
     
     # Ensure Ops Admin can always log in (RBAC: ops_admin)
     try:
@@ -23,6 +87,7 @@ async def lifespan(app: FastAPI):
 
         admin_email = "ops@artinglass.com"
         admin_password = "AdminPassword123!"
+        now = datetime.utcnow()
 
         existing_admin = await users_collection.find_one({
             "email": {"$regex": f"^{admin_email}$", "$options": "i"}
@@ -35,6 +100,11 @@ async def lifespan(app: FastAPI):
                 "phone": "+919876543210",
                 "role": "ops_admin",
                 "password_hash": get_password_hash(admin_password),
+                "is_active": True,
+                "default_shipping_address": None,
+                "notification_preferences": dict(DEFAULT_NOTIFICATION_PREFS),
+                "created_at": now,
+                "updated_at": now,
             }
             result = await users_collection.insert_one(admin_data)
             print("[OK] Ops Admin user created successfully!")
@@ -63,12 +133,23 @@ async def lifespan(app: FastAPI):
             if existing_admin.get("email") != admin_email:
                 repairs["email"] = admin_email
 
+            if "notification_preferences" not in existing_admin:
+                repairs["notification_preferences"] = dict(DEFAULT_NOTIFICATION_PREFS)
+            if "default_shipping_address" not in existing_admin:
+                repairs["default_shipping_address"] = None
+            if "is_active" not in existing_admin:
+                repairs["is_active"] = True
+            if "created_at" not in existing_admin:
+                repairs["created_at"] = now
+            if "updated_at" not in existing_admin:
+                repairs["updated_at"] = now
+
             if repairs:
                 await users_collection.update_one(
                     {"_id": existing_admin["_id"]},
                     {"$set": repairs},
                 )
-                print("[OK] Ops Admin credentials repaired")
+                print("[OK] Ops Admin credentials / profile repaired")
             else:
                 print("[OK] Ops Admin user ready")
 
@@ -103,6 +184,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(orders.router)
+app.include_router(wishlist.router)
 
 
 @app.get("/")

@@ -1,40 +1,61 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import LogoutIcon from '../components/LogoutIcon';
 
 export default function ProfileScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshUser();
+    }, [refreshUser])
+  );
 
   const menuItems = [
     {
       id: '1',
-      title: 'My Orders',
-      icon: 'list-outline',
+      title: 'Edit Profile',
+      icon: 'person-outline',
       color: '#8B5CF6',
-      onPress: () => navigation.navigate('Orders')
+      onPress: () => navigation.navigate('EditProfile'),
     },
     {
       id: '2',
-      title: 'Cart',
-      icon: 'cart-outline',
-      color: '#EC4899',
-      onPress: () => navigation.navigate('Cart')
+      title: 'My Orders',
+      icon: 'list-outline',
+      color: '#F59E0B',
+      onPress: () => navigation.navigate('Orders'),
     },
     {
       id: '3',
-      title: 'Settings',
-      icon: 'settings-outline',
-      color: '#3B82F6',
-      onPress: () => Alert.alert('Coming Soon', 'Settings feature will be available soon')
+      title: 'Wishlist',
+      icon: 'heart-outline',
+      color: '#EC4899',
+      onPress: () => navigation.navigate('Wishlist'),
     },
     {
       id: '4',
+      title: 'Cart',
+      icon: 'cart-outline',
+      color: '#3B82F6',
+      onPress: () => navigation.navigate('Cart'),
+    },
+    {
+      id: '5',
+      title: 'Notifications',
+      icon: 'notifications-outline',
+      color: '#10B981',
+      onPress: () => navigation.navigate('NotificationSettings'),
+    },
+    {
+      id: '6',
       title: 'Help & Support',
       icon: 'help-circle-outline',
-      color: '#10B981',
-      onPress: () => Alert.alert('Contact Us', 'Email: support@artinglass.com\nPhone: +91 98765 43210')
+      color: '#6366F1',
+      onPress: () => navigation.navigate('Support'),
     },
   ];
 
@@ -55,6 +76,7 @@ export default function ProfileScreen({ navigation }) {
         </View>
         <Text style={styles.userName}>{user?.full_name || 'User'}</Text>
         <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
+        {!!user?.phone && <Text style={styles.userPhone}>{user.phone}</Text>}
         <View style={styles.roleBadge}>
           <Text style={styles.roleText}>{user?.role?.toUpperCase() || 'CUSTOMER'}</Text>
         </View>
@@ -63,10 +85,13 @@ export default function ProfileScreen({ navigation }) {
       <View style={styles.menuSection}>
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.menuCard}>
-          {menuItems.map((item) => (
+          {menuItems.map((item, index) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.menuItem}
+              style={[
+                styles.menuItem,
+                index === menuItems.length - 1 && styles.menuItemLast,
+              ]}
               onPress={item.onPress}
             >
               <View style={[styles.menuIconContainer, { backgroundColor: item.color + '20' }]}>
@@ -137,6 +162,11 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: '#E9D5FF',
+    marginBottom: 4,
+  },
+  userPhone: {
+    fontSize: 13,
+    color: '#E9D5FF',
     marginBottom: 12,
   },
   roleBadge: {
@@ -172,6 +202,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
   },
   menuIconContainer: {
     width: 48,

@@ -19,12 +19,30 @@ export default function ProductDetailScreen({ route, navigation }) {
   const { user } = useAuth();
   const { addToCart } = useCart();
 
-  const colors = product.customization_options?.color_shades || [
+  const fallbackColors = [
     { id: '1', name: 'Purple', value: '#8B5CF6' },
     { id: '2', name: 'Pink', value: '#EC4899' },
     { id: '3', name: 'Blue', value: '#3B82F6' },
     { id: '4', name: 'Green', value: '#10B981' },
   ];
+
+  // Support admin objects {id,name,value} and legacy string shade names
+  const colors = (product.customization_options?.color_shades || fallbackColors).map(
+    (shade, index) => {
+      if (typeof shade === 'string') {
+        return { id: String(index + 1), name: shade, value: shade.startsWith('#') ? shade : '#8B5CF6' };
+      }
+      return {
+        id: shade.id || String(index + 1),
+        name: shade.name || `Color ${index + 1}`,
+        value: shade.value || shade.color || '#8B5CF6',
+      };
+    }
+  );
+
+  const textInputEnabled =
+    product.customization_options?.has_text_input ||
+    product.customization_options?.text_enabled;
 
   const handleAddToCart = () => {
     if (!user) {
@@ -66,6 +84,7 @@ export default function ProductDetailScreen({ route, navigation }) {
       price: product.base_price,
       custom_notes: customNotes || null,
       custom_image_url: selectedImage,
+      custom_color: selectedColor || null,
     }];
 
     navigation.navigate('Checkout', {
@@ -196,9 +215,9 @@ export default function ProductDetailScreen({ route, navigation }) {
             <Text style={styles.sectionTitle}>Customization Options</Text>
             
             {/* Custom Notes */}
-            {product.customization_options?.has_text_input && (
+            {textInputEnabled && (
               <View style={styles.customizationItem}>
-                <Text style={styles.customizationLabel}>Custom Text/Quote (Optional)</Text>
+                <Text style={styles.customizationLabel}>Custom Name/Quote (Optional)</Text>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Enter custom name or quote..."
@@ -211,7 +230,7 @@ export default function ProductDetailScreen({ route, navigation }) {
             )}
 
             {/* Color Selection */}
-            {product.customization_options?.color_shades && (
+            {colors.length > 0 && (
               <View style={styles.customizationItem}>
                 <Text style={styles.customizationLabel}>Choose Color</Text>
                 <View style={styles.colorGrid}>
@@ -220,12 +239,12 @@ export default function ProductDetailScreen({ route, navigation }) {
                       key={color.id || color.name}
                       style={[
                         styles.colorOption,
-                        { backgroundColor: color.value || color },
-                        selectedColor === (color.value || color) && styles.selectedColor
+                        { backgroundColor: color.value },
+                        selectedColor === color.value && styles.selectedColor
                       ]}
-                      onPress={() => setSelectedColor(color.value || color)}
+                      onPress={() => setSelectedColor(color.value)}
                     >
-                      {selectedColor === (color.value || color) && (
+                      {selectedColor === color.value && (
                         <Ionicons name="checkmark" size={20} color="#FFFFFF" />
                       )}
                     </TouchableOpacity>

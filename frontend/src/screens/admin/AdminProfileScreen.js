@@ -1,36 +1,75 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { API_BASE_URL } from '../../config/api';
 import { Ionicons } from '@expo/vector-icons';
 import LogoutIcon from '../../components/LogoutIcon';
 
 export default function AdminProfileScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, token, refreshUser } = useAuth();
+  const [stats, setStats] = useState({ products: 0, orders: 0, delivered: 0, pending: 0 });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  const loadStats = useCallback(async () => {
+    if (!token) {
+      setLoadingStats(false);
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_BASE_URL}/auth/admin/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setStats({
+        products: response.data?.products ?? 0,
+        orders: response.data?.orders ?? 0,
+        delivered: response.data?.delivered ?? 0,
+        pending: response.data?.pending ?? 0,
+      });
+    } catch (error) {
+      console.warn('Admin stats error:', error.message);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoadingStats(true);
+      refreshUser();
+      loadStats();
+    }, [refreshUser, loadStats])
+  );
 
   const menuItems = [
     {
       id: '1',
       title: 'Account Settings',
       icon: 'person-outline',
-      onPress: () => Alert.alert('Coming Soon', 'Account settings will be available soon'),
+      onPress: () => navigation.navigate('EditProfile'),
     },
     {
       id: '2',
       title: 'Notifications',
       icon: 'notifications-outline',
-      onPress: () => Alert.alert('Coming Soon', 'Notification settings will be available soon'),
+      onPress: () => navigation.navigate('NotificationSettings'),
     },
     {
       id: '3',
       title: 'Help & Support',
       icon: 'help-circle-outline',
-      onPress: () => Alert.alert('Contact', 'Email: support@artinglass.com'),
+      onPress: () => navigation.navigate('Support'),
     },
     {
       id: '4',
       title: 'About App',
       icon: 'information-circle-outline',
-      onPress: () => Alert.alert('Art In Glass', 'Ops Admin Panel v1.0.0'),
+      onPress: () =>
+        Alert.alert(
+          'Art In Glass',
+          'Ops Admin Panel v1.0.0\nManage catalog, orders, and customer requests.'
+        ),
     },
   ];
 
@@ -44,11 +83,14 @@ export default function AdminProfileScreen({ navigation }) {
 
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={48} color="#FFFFFF" />
+            <Text style={styles.avatarText}>
+              {user?.full_name?.charAt(0).toUpperCase() || 'A'}
+            </Text>
           </View>
         </View>
         <Text style={styles.name}>{user?.full_name || 'Admin'}</Text>
         <Text style={styles.email}>{user?.email || 'ops@artinglass.com'}</Text>
+        {!!user?.phone && <Text style={styles.phone}>{user.phone}</Text>}
         <View style={styles.roleBadge}>
           <Text style={styles.roleText}>
             {(user?.role || 'admin').replace('_', ' ').toUpperCase()}
@@ -59,20 +101,43 @@ export default function AdminProfileScreen({ navigation }) {
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Ionicons name="cube-outline" size={28} color="#8B5CF6" />
-          <Text style={styles.statValue}>--</Text>
+          {loadingStats ? (
+            <ActivityIndicator style={styles.statLoader} color="#8B5CF6" />
+          ) : (
+            <Text style={styles.statValue}>{stats.products}</Text>
+          )}
           <Text style={styles.statLabel}>Products</Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="list-outline" size={28} color="#EC4899" />
-          <Text style={styles.statValue}>--</Text>
+          {loadingStats ? (
+            <ActivityIndicator style={styles.statLoader} color="#EC4899" />
+          ) : (
+            <Text style={styles.statValue}>{stats.orders}</Text>
+          )}
           <Text style={styles.statLabel}>Orders</Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="checkmark-circle-outline" size={28} color="#10B981" />
-          <Text style={styles.statValue}>--</Text>
+          {loadingStats ? (
+            <ActivityIndicator style={styles.statLoader} color="#10B981" />
+          ) : (
+            <Text style={styles.statValue}>{stats.delivered}</Text>
+          )}
           <Text style={styles.statLabel}>Delivered</Text>
         </View>
       </View>
+
+      {!loadingStats && stats.pending > 0 ? (
+        <TouchableOpacity
+          style={styles.pendingBanner}
+          onPress={() => navigation.navigate('Orders')}
+        >
+          <Ionicons name="time-outline" size={20} color="#F59E0B" />
+          <Text style={styles.pendingText}>{stats.pending} pending order(s) need attention</Text>
+          <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
+        </TouchableOpacity>
+      ) : null}
 
       <View style={styles.menuSection}>
         <Text style={styles.menuSectionTitle}>Settings</Text>
@@ -126,11 +191,16 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: '#E9D5FF',
+  },
+  avatarText: {
+    fontSize: 40,
+    fontWeight: 'bold',
+    color: '#8B5CF6',
   },
   name: {
     fontSize: 22,
@@ -140,6 +210,11 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 14,
+    color: '#E9D5FF',
+    marginBottom: 4,
+  },
+  phone: {
+    fontSize: 13,
     color: '#E9D5FF',
     marginBottom: 12,
   },
@@ -158,7 +233,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 24,
     marginTop: -20,
-    marginBottom: 24,
+    marginBottom: 16,
     gap: 12,
   },
   statCard: {
@@ -175,10 +250,32 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginTop: 8,
   },
+  statLoader: {
+    marginTop: 10,
+    marginBottom: 4,
+  },
   statLabel: {
     fontSize: 12,
     color: '#6B7280',
     marginTop: 4,
+  },
+  pendingBanner: {
+    marginHorizontal: 24,
+    marginBottom: 16,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  pendingText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400E',
   },
   menuSection: {
     paddingHorizontal: 24,

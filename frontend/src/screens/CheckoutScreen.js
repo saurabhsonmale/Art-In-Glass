@@ -10,16 +10,17 @@ import { API_BASE_URL } from '../config/api';
 export default function CheckoutScreen({ route, navigation }) {
   const { items, total_amount } = route.params || { items: [], total_amount: 0 };
   const [loading, setLoading] = useState(false);
-  const { user, token } = useAuth();
+  const { user, token, updateProfile } = useAuth();
   const { clearCart } = useCart();
 
+  const savedAddress = user?.default_shipping_address || {};
   const [address, setAddress] = useState({
     full_name: user?.full_name || '',
-    street: '',
-    city: '',
-    state: '',
-    zipcode: '',
-    phone: user?.phone || '',
+    street: savedAddress.street || '',
+    city: savedAddress.city || '',
+    state: savedAddress.state || '',
+    zipcode: savedAddress.zipcode || '',
+    phone: savedAddress.phone || user?.phone || '',
   });
 
   const [paymentMethod, setPaymentMethod] = useState('cod');
@@ -67,6 +68,7 @@ export default function CheckoutScreen({ route, navigation }) {
           price: item.price,
           custom_notes: item.custom_notes || null,
           custom_image_url: item.custom_image_url || null,
+          custom_color: item.custom_color || null,
         })),
         total_amount: total_amount,
         shipping_address: {
@@ -86,6 +88,17 @@ export default function CheckoutScreen({ route, navigation }) {
       });
 
       clearCart();
+
+      // Persist shipping address on profile for next checkout (non-blocking)
+      void updateProfile({
+        default_shipping_address: {
+          street: address.street.trim(),
+          city: address.city.trim(),
+          state: address.state.trim(),
+          zipcode: address.zipcode.trim(),
+          phone: address.phone.trim(),
+        },
+      });
       
       Alert.alert(
         'Success!',
@@ -122,6 +135,9 @@ export default function CheckoutScreen({ route, navigation }) {
                 <Text style={styles.itemDetails}>Qty: {item.quantity} × ₹{item.price.toFixed(2)}</Text>
                 {item.custom_notes && (
                   <Text style={styles.customNotes}>Custom: {item.custom_notes}</Text>
+                )}
+                {item.custom_color && (
+                  <Text style={styles.customNotes}>Color: {item.custom_color}</Text>
                 )}
               </View>
               <Text style={styles.itemPrice}>₹{(item.quantity * item.price).toFixed(2)}</Text>

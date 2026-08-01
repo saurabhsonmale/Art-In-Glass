@@ -8,9 +8,18 @@ import AdminOrdersScreen from './AdminOrdersScreen';
 import AddProductScreen from './AddProductScreen';
 import ManageCatalogScreen from './ManageCatalogScreen';
 import AdminProfileScreen from './AdminProfileScreen';
+import EditProfileScreen from '../EditProfileScreen';
+import NotificationSettingsScreen from '../NotificationSettingsScreen';
+import SupportScreen from '../SupportScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+const headerOptions = {
+  headerStyle: { backgroundColor: '#8B5CF6' },
+  headerTintColor: '#fff',
+  headerTitleStyle: { fontWeight: 'bold' },
+};
 
 // Tab Navigator for Admin
 function AdminTabs() {
@@ -34,13 +43,7 @@ function AdminTabs() {
         },
         tabBarActiveTintColor: '#8B5CF6',
         tabBarInactiveTintColor: 'gray',
-        headerStyle: {
-          backgroundColor: '#8B5CF6',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        ...headerOptions,
       })}
     >
       <Tab.Screen 
@@ -67,7 +70,26 @@ function AdminTabs() {
   );
 }
 
-// Admin Navigator - No NavigationContainer here (parent App.js provides it)
+// Admin Navigator - stack wraps tabs so profile sub-screens work
 export default function AdminNavigator() {
-  return <AdminTabs />;
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="AdminTabs" component={AdminTabs} />
+      <Stack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ ...headerOptions, headerShown: true, title: 'Account Settings' }}
+      />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{ ...headerOptions, headerShown: true, title: 'Notifications' }}
+      />
+      <Stack.Screen
+        name="Support"
+        component={SupportScreen}
+        options={{ ...headerOptions, headerShown: true, title: 'Help & Support' }}
+      />
+    </Stack.Navigator>
+  );
 }

@@ -106,7 +106,9 @@ export default function AddProductScreen({ navigation }) {
         images: images,
         is_customizable: isCustomizable,
         customization_options: {
+          // Both keys kept in sync for customer ProductDetailScreen
           text_enabled: isCustomizable,
+          has_text_input: isCustomizable,
           photo_required: requiresPhoto,
           color_shades: selectedColors.map((colorName) => {
             const colorOption = colorOptions.find((c) => c.name === colorName);

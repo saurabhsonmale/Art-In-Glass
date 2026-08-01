@@ -21,6 +21,10 @@ import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
 import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
+import NotificationSettingsScreen from './src/screens/NotificationSettingsScreen';
+import SupportScreen from './src/screens/SupportScreen';
+import WishlistScreen from './src/screens/WishlistScreen';
 
 // Admin Screens
 import AdminNavigator from './src/screens/admin/AdminNavigator';
@@ -56,14 +60,25 @@ function MainTabs() {
   );
 }
 
+const profileStackScreenOptions = {
+  headerShown: true,
+  headerStyle: { backgroundColor: '#8B5CF6' },
+  headerTintColor: '#fff',
+  headerTitleStyle: { fontWeight: 'bold' },
+};
+
 // Customer Navigator
 function CustomerNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={MainTabs} />
-      <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ headerShown: true, title: 'Product Details', headerStyle: { backgroundColor: '#8B5CF6' }, headerTintColor: '#fff' }} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: true, title: 'Checkout', headerStyle: { backgroundColor: '#8B5CF6' }, headerTintColor: '#fff' }} />
-      <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} options={{ headerShown: true, title: 'Track Order', headerStyle: { backgroundColor: '#8B5CF6' }, headerTintColor: '#fff' }} />
+      <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ ...profileStackScreenOptions, title: 'Product Details' }} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ ...profileStackScreenOptions, title: 'Checkout' }} />
+      <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} options={{ ...profileStackScreenOptions, title: 'Track Order' }} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ ...profileStackScreenOptions, title: 'Edit Profile' }} />
+      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ ...profileStackScreenOptions, title: 'Notifications' }} />
+      <Stack.Screen name="Support" component={SupportScreen} options={{ ...profileStackScreenOptions, title: 'Help & Support' }} />
+      <Stack.Screen name="Wishlist" component={WishlistScreen} options={{ ...profileStackScreenOptions, title: 'Wishlist' }} />
     </Stack.Navigator>
   );
 }

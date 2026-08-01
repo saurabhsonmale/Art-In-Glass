@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config/api';
@@ -18,11 +19,13 @@ export default function AdminOrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { token } = useAuth();
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  const fetchOrders = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
-  const fetchOrders = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/orders`, {
         headers: {
@@ -32,12 +35,20 @@ export default function AdminOrdersScreen() {
       setOrders(response.data);
     } catch (error) {
       console.error('Error fetching orders:', error);
-      Alert.alert('Error', 'Failed to load orders');
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to load orders');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [token]);
+
+  // Refetch when Orders tab is focused so new customer orders appear
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchOrders();
+    }, [fetchOrders])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -119,6 +130,12 @@ export default function AdminOrdersScreen() {
               <Text style={styles.itemDetails}>
                 Qty: {orderItem.quantity} × ₹{orderItem.price.toFixed(2)}
               </Text>
+              {orderItem.custom_notes ? (
+                <Text style={styles.itemDetails}>Note: {orderItem.custom_notes}</Text>
+              ) : null}
+              {orderItem.custom_color ? (
+                <Text style={styles.itemDetails}>Color: {orderItem.custom_color}</Text>
+              ) : null}
             </View>
           ))}
         </View>
@@ -172,9 +189,20 @@ export default function AdminOrdersScreen() {
       </View>
 
       {orders.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <ScrollView
+          contentContainerStyle={styles.emptyContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#8B5CF6']}
+              tintColor="#8B5CF6"
+            />
+          }
+        >
           <Text style={styles.emptyText}>No orders yet</Text>
-        </View>
+          <Text style={styles.emptyHint}>Pull down to refresh when customers place orders</Text>
+        </ScrollView>
       ) : (
         <FlatList
           data={orders}
@@ -337,11 +365,20 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   emptyContainer: {
+    flexGrow: 1,
     paddingVertical: 60,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyText: {
     fontSize: 16,
     color: '#6B7280',
+  },
+  emptyHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingHorizontal: 24,
   },
 });

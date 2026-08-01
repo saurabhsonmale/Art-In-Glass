@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,11 +14,7 @@ export default function ManageCatalogScreen({ navigation }) {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/products`, {
@@ -33,7 +30,15 @@ export default function ManageCatalogScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  // Refresh when returning from Add Product so new items show immediately
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchProducts();
+    }, [fetchProducts])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -162,7 +167,17 @@ export default function ManageCatalogScreen({ navigation }) {
       </View>
 
       {products.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <ScrollView
+          contentContainerStyle={styles.emptyContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#8B5CF6']}
+              tintColor="#8B5CF6"
+            />
+          }
+        >
           <Ionicons name="cube-outline" size={60} color="#D1D5DB" />
           <Text style={styles.emptyText}>No products in catalog</Text>
           <TouchableOpacity
@@ -172,7 +187,7 @@ export default function ManageCatalogScreen({ navigation }) {
             <Ionicons name="add-circle" size={20} color="#FFFFFF" />
             <Text style={styles.addButtonText}>Add Your First Product</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={products}

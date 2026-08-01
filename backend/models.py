@@ -37,10 +37,36 @@ class UserLogin(BaseModel):
     password: str
 
 
+class NotificationPreferences(BaseModel):
+    order_updates: bool = True
+    promotions: bool = False
+    push_enabled: bool = True
+
+
+class ProfileShippingAddress(BaseModel):
+    street: str = ""
+    city: str = ""
+    state: str = ""
+    zipcode: str = ""
+    phone: str = ""
+
+
+class UserProfileUpdate(BaseModel):
+    """Partial profile update from Profile / Account Settings."""
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    default_shipping_address: Optional[ProfileShippingAddress] = None
+    notification_preferences: Optional[NotificationPreferences] = None
+
+
 class User(UserBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     password_hash: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+    default_shipping_address: Optional[Dict[str, Any]] = None
+    notification_preferences: Optional[Dict[str, Any]] = None
+    is_active: bool = True
 
     class Config:
         populate_by_name = True
@@ -51,10 +77,23 @@ class User(UserBase):
 class UserResponse(UserBase):
     id: str
     created_at: str  # Changed to str to handle ISO format datetime strings
+    updated_at: Optional[str] = None
+    default_shipping_address: Optional[Dict[str, Any]] = None
+    notification_preferences: Optional[Dict[str, Any]] = None
+    phone: str = ""
 
     class Config:
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
+
+
+class SupportTicketCreate(BaseModel):
+    subject: str
+    message: str
+
+
+class WishlistUpdate(BaseModel):
+    product_id: str
 
 
 # Product Models
@@ -114,6 +153,7 @@ class OrderItem(BaseModel):
     price: float
     custom_notes: Optional[str] = None
     custom_image_url: Optional[str] = None
+    custom_color: Optional[str] = None
 
 
 class TrackingDetails(BaseModel):

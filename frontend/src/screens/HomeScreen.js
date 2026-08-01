@@ -22,14 +22,31 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { addToCart, getCartCount } = useCart();
+  const [wishlistIds, setWishlistIds] = useState([]);
+
+  const fetchWishlistIds = async () => {
+    if (!token) {
+      setWishlistIds([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_BASE_URL}/wishlist`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setWishlistIds(response.data?.product_ids || []);
+    } catch (_) {
+      // Non-blocking — catalog still works if wishlist fails
+    }
+  };
 
   const fetchProducts = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/products`);
       setProducts(response.data);
       setFilteredProducts(response.data);
+      await fetchWishlistIds();
     } catch (error) {
       console.error('Error fetching products:', error);
       Alert.alert('Error', 'Failed to load products. Please try again.');
@@ -43,8 +60,34 @@ export default function HomeScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
-    }, [])
+    }, [token])
   );
+
+  const toggleWishlist = async (productId) => {
+    if (!user || !token) {
+      Alert.alert('Login Required', 'Please login to use wishlist');
+      return;
+    }
+
+    const inWishlist = wishlistIds.includes(productId);
+    try {
+      if (inWishlist) {
+        await axios.delete(`${API_BASE_URL}/wishlist/${productId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setWishlistIds((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await axios.post(
+          `${API_BASE_URL}/wishlist`,
+          { product_id: productId },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setWishlistIds((prev) => [...prev, productId]);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.detail || 'Wishlist update failed');
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -97,9 +140,13 @@ export default function HomeScreen({ navigation }) {
         )}
         <TouchableOpacity 
           style={styles.heartButton}
-          onPress={() => Alert.alert('Wishlist', 'Added to wishlist!')}
+          onPress={() => toggleWishlist(item.id)}
         >
-          <Ionicons name="heart-outline" size={20} color="#8B5CF6" />
+          <Ionicons
+            name={wishlistIds.includes(item.id) ? 'heart' : 'heart-outline'}
+            size={20}
+            color="#8B5CF6"
+          />
         </TouchableOpacity>
       </View>
       <View style={styles.productInfo}>

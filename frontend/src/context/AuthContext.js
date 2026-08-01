@@ -112,6 +112,55 @@ export const AuthProvider = ({ children }) => {
     setLogoutCounter((prev) => prev + 1);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const storedToken = token || (await AsyncStorage.getItem(AUTH_TOKEN_KEY));
+      if (!storedToken) {
+        return { success: false, error: 'Not authenticated' };
+      }
+      const response = await axios.get('/auth/me', {
+        headers: { Authorization: `Bearer ${storedToken}` },
+      });
+      const role = normalizeRole(response.data?.role) || 'customer';
+      const normalizedUser = { ...response.data, role };
+      await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(normalizedUser));
+      setUser(normalizedUser);
+      return { success: true, user: normalizedUser };
+    } catch (error) {
+      console.warn('refreshUser failed:', error.message);
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Failed to refresh profile',
+      };
+    }
+  }, [token]);
+
+  const updateProfile = useCallback(
+    async (profileData) => {
+      try {
+        const storedToken = token || (await AsyncStorage.getItem(AUTH_TOKEN_KEY));
+        if (!storedToken) {
+          return { success: false, error: 'Not authenticated' };
+        }
+        const response = await axios.put('/auth/me', profileData, {
+          headers: { Authorization: `Bearer ${storedToken}` },
+        });
+        const role = normalizeRole(response.data?.role) || 'customer';
+        const normalizedUser = { ...response.data, role };
+        await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(normalizedUser));
+        setUser(normalizedUser);
+        return { success: true, user: normalizedUser };
+      } catch (error) {
+        console.error('updateProfile error:', error);
+        return {
+          success: false,
+          error: error.response?.data?.detail || 'Failed to update profile',
+        };
+      }
+    },
+    [token]
+  );
+
   const login = async (email, password) => {
     const normalizedEmail = (email || '').trim().toLowerCase();
     try {
@@ -264,6 +313,8 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    refreshUser,
+    updateProfile,
   };
 
   return (

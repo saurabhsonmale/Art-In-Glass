@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,13 +52,16 @@ const getStatusIcon = (status) => {
 export default function OrderHistoryScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const { token } = useAuth();
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  const fetchOrders = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
-  const fetchOrders = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/orders/my-orders`, {
         headers: {
@@ -70,8 +74,16 @@ export default function OrderHistoryScreen({ navigation }) {
       Alert.alert('Error', 'Failed to load orders');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchOrders();
+    }, [fetchOrders])
+  );
 
   const renderOrder = ({ item }) => (
     <TouchableOpacity 
@@ -134,6 +146,17 @@ export default function OrderHistoryScreen({ navigation }) {
           renderItem={renderOrder}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.ordersList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                fetchOrders();
+              }}
+              colors={['#8B5CF6']}
+              tintColor="#8B5CF6"
+            />
+          }
         />
       )}
     </View>
