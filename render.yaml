@@ -1,0 +1,33 @@
+# Render Blueprint — Art In Glass API
+# Live URL: https://art-in-glass.onrender.com
+#
+# IMPORTANT: This is a Python FastAPI service (NOT Node / yarn).
+# In Render Dashboard → Settings, use the values below (or apply this blueprint).
+services:
+  - type: web
+    name: art-in-glass
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PUBLIC_BASE_URL
+        value: https://art-in-glass.onrender.com
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: DATABASE_NAME
+        value: resin_art_db
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false

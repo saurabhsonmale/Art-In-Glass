@@ -171,11 +171,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS — include live Render URL; "*" kept for mobile APK clients
+_cors_origins = settings.get_cors_origins()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -199,15 +200,23 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+    """Health check endpoint (also used to wake Render free-tier)."""
+    return {
+        "status": "healthy",
+        "public_base_url": settings.public_base_url,
+        "environment": settings.environment,
+    }
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
+
+    # Render sets PORT; fall back to settings / 8000 locally
+    port = int(os.environ.get("PORT", settings.port))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=settings.port,
-        reload=settings.environment == "development"
+        port=port,
+        reload=settings.environment == "development",
     )

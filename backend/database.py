@@ -23,8 +23,15 @@ SUPPORT_TICKETS_COLLECTION = "support_tickets"
 async def connect_to_mongo():
     """Create database connection and initialize collections"""
     try:
-        db.client = AsyncIOMotorClient(settings.mongodb_uri)
+        db.client = AsyncIOMotorClient(
+            settings.mongodb_uri,
+            serverSelectionTimeoutMS=settings.mongodb_server_selection_timeout_ms,
+            connectTimeoutMS=settings.mongodb_server_selection_timeout_ms,
+        )
         db.database = db.client[settings.database_name]
+
+        # Fail fast if Atlas/network blocks Render (instead of hanging forever)
+        await db.client.admin.command("ping")
 
         await initialize_collections()
 
@@ -35,6 +42,10 @@ async def connect_to_mongo():
         )
     except Exception as e:
         print(f"[ERROR] Error connecting to MongoDB: {e}")
+        print(
+            "[HINT] On MongoDB Atlas → Network Access, allow Render / public access "
+            "(0.0.0.0/0) or the hosting CIDRs: 74.220.49.0/24, 74.220.57.0/24"
+        )
         raise
 
 

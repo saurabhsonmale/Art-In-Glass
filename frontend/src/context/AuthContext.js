@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, API_ORIGIN, IS_LIVE_API } from '../config/api';
 import {
   normalizeRole,
   isAdminRole,
@@ -12,6 +12,24 @@ import {
 
 const AUTH_TOKEN_KEY = 'token';
 const AUTH_USER_KEY = 'user';
+
+// Render free tier can take ~60s to wake; give live API more time
+const API_TIMEOUT_MS = IS_LIVE_API ? 90000 : 20000;
+
+async function wakeLiveBackend() {
+  if (!IS_LIVE_API) return;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    await fetch(`${API_ORIGIN}/health`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+  } catch (_) {
+    // First ping may time out while Render spins up; login will retry
+  }
+}
 
 const AuthContext = createContext();
 
@@ -42,6 +60,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     axios.defaults.baseURL = API_BASE_URL;
+    axios.defaults.timeout = API_TIMEOUT_MS;
+    // Wake Render free-tier on app open so first login is faster
+    wakeLiveBackend();
   }, []);
 
   useEffect(() => {
@@ -164,6 +185,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const normalizedEmail = (email || '').trim().toLowerCase();
     try {
+      // Ensure live backend is awake before auth (Render cold start)
+      await wakeLiveBackend();
+
       const response = await axios.post('/auth/login', {
         email: normalizedEmail,
         password,
