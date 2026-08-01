@@ -14,36 +14,67 @@ async def lifespan(app: FastAPI):
     # Startup
     await connect_to_mongo()
     
-    # Seed admin user
+    # Ensure Ops Admin can always log in (RBAC: ops_admin)
     try:
+        from auth import verify_password
+
         db = get_database()
         users_collection = db[USERS_COLLECTION]
-        
-        # Check if admin already exists
-        existing_admin = await users_collection.find_one({"email": "ops@artinglass.com"})
-        
+
+        admin_email = "ops@artinglass.com"
+        admin_password = "AdminPassword123!"
+
+        existing_admin = await users_collection.find_one({
+            "email": {"$regex": f"^{admin_email}$", "$options": "i"}
+        })
+
         if not existing_admin:
-            # Create admin user
             admin_data = {
                 "full_name": "Ops Admin",
-                "email": "ops@artinglass.com",
+                "email": admin_email,
                 "phone": "+919876543210",
                 "role": "ops_admin",
-                "password_hash": get_password_hash("AdminPassword123!"),
-                "created_at": None  # Will use MongoDB default
+                "password_hash": get_password_hash(admin_password),
             }
-            
             result = await users_collection.insert_one(admin_data)
             print("✓ Ops Admin user created successfully!")
-            print(f"  Email: ops@artinglass.com")
-            print(f"  Password: AdminPassword123!")
+            print(f"  Email: {admin_email}")
+            print(f"  Password: {admin_password}")
             print(f"  Role: ops_admin")
             print(f"  User ID: {result.inserted_id}")
-            print("\n⚠️  Please change the password after first login!")
         else:
-            print("✓ Ops Admin user already exists")
-            print(f"  Email: ops@artinglass.com")
-            print(f"  Role: {existing_admin.get('role', 'customer')}")
+            repairs = {}
+            current_role = str(existing_admin.get("role") or "").strip().lower()
+            if current_role != "ops_admin":
+                repairs["role"] = "ops_admin"
+
+            # Repair broken/missing hash so default admin credentials work
+            stored_hash = existing_admin.get("password_hash") or ""
+            password_ok = False
+            if stored_hash:
+                try:
+                    password_ok = verify_password(admin_password, stored_hash)
+                except Exception:
+                    password_ok = False
+            if not password_ok:
+                repairs["password_hash"] = get_password_hash(admin_password)
+
+            # Keep email normalized lowercase for reliable login
+            if existing_admin.get("email") != admin_email:
+                repairs["email"] = admin_email
+
+            if repairs:
+                await users_collection.update_one(
+                    {"_id": existing_admin["_id"]},
+                    {"$set": repairs},
+                )
+                print("✓ Ops Admin credentials repaired")
+            else:
+                print("✓ Ops Admin user ready")
+
+            print(f"  Email: {admin_email}")
+            print(f"  Password: {admin_password}")
+            print("  Role: ops_admin")
     except Exception as e:
         print(f"✗ Error seeding admin user: {e}")
     

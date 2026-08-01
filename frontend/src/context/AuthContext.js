@@ -113,27 +113,49 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
+    const normalizedEmail = (email || '').trim().toLowerCase();
     try {
       const response = await axios.post('/auth/login', {
-        email,
+        email: normalizedEmail,
         password,
       });
 
-      const { access_token } = response.data;
+      const { access_token, role, user_id } = response.data;
 
-      const userResponse = await axios.get('/auth/me', {
-        headers: {
-          Authorization: `Bearer ${access_token}`,
-        },
-      });
+      let profile = null;
+      try {
+        const userResponse = await axios.get('/auth/me', {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
+        });
+        profile = userResponse.data;
+      } catch (meError) {
+        // Still allow login (admin/customer) if /me fails after a valid token
+        console.warn('auth/me failed, using login token payload:', meError.message);
+        profile = {
+          id: user_id,
+          email: normalizedEmail,
+          role: role || 'customer',
+          full_name: isAdminRole(role) ? 'Admin' : 'User',
+        };
+      }
 
-      const userData = await applySession(access_token, userResponse.data);
+      // Prefer explicit role from login JWT payload for RBAC routing
+      if (role && !profile.role) {
+        profile.role = role;
+      } else if (role && normalizeRole(profile.role) !== normalizeRole(role)) {
+        profile.role = role;
+      }
+
+      const userData = await applySession(access_token, profile);
       return { success: true, user: userData };
     } catch (error) {
       console.error('Login error:', error);
+      const detail = error.response?.data?.detail;
       return {
         success: false,
-        error: error.response?.data?.detail || 'Login failed',
+        error: typeof detail === 'string' ? detail : 'Login failed',
       };
     }
   };

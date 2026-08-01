@@ -28,11 +28,20 @@
       },
       "permissions": [
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
       ],
       "package": "com.saurabh2001.artinglass"
     },
     "web": {},
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Art In Glass to access your photos for resin art customization."
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "6cda189f-cc36-4e39-aa1c-7296724a8dcc"

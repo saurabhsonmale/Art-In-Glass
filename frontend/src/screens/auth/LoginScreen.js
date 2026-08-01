@@ -11,20 +11,19 @@ export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!email?.trim() || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     setLoading(true);
-    const result = await login(email, password);
+    const result = await login(email.trim().toLowerCase(), password);
     setLoading(false);
 
-    if (result.success) {
-      // Navigation will be handled by App.js based on auth state
-    } else {
-      Alert.alert('Login Failed', result.error);
+    if (!result.success) {
+      Alert.alert('Login Failed', result.error || 'Invalid email or password');
     }
+    // Navigation is handled by App.js from auth/RBAC state
   };
 
   return (

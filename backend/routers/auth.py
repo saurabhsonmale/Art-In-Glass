@@ -8,6 +8,7 @@ from config import settings
 from bson import ObjectId
 from typing import Dict, Any
 from jose import JWTError, jwt
+import re
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
@@ -76,40 +77,49 @@ async def register(user_data: UserCreate):
 
 @router.post("/login", response_model=Token)
 async def login(credentials: UserLogin):
-    """Login user and return JWT token"""
+    """Login user and return JWT token (works for customer, admin, ops_admin)."""
     try:
         db = get_database()
         users_collection = db[USERS_COLLECTION]
-        
-        # Find user by email
-        user = await users_collection.find_one({"email": credentials.email})
+
+        email = (credentials.email or "").strip().lower()
+        password = credentials.password or ""
+
+        # Case-insensitive email match (admin + customer)
+        user = await users_collection.find_one({
+            "email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}
+        })
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
-        # Verify password
-        if not verify_password(credentials.password, user["password_hash"]):
+
+        password_hash = user.get("password_hash") or ""
+        if not password_hash or not verify_password(password, password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
+        role = str(user.get("role") or "customer").strip().lower()
+        if role not in {"customer", "admin", "ops_admin"}:
+            role = "customer"
+
         # Create access token
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
         access_token = create_access_token(
-            data={"sub": str(user["_id"]), "role": user["role"]},
+            data={"sub": str(user["_id"]), "role": role},
             expires_delta=access_token_expires
         )
-        
+
         return {
             "access_token": access_token,
             "token_type": "bearer",
             "user_id": str(user["_id"]),
-            "role": user["role"]
+            "role": role
         }
     
     except HTTPException:
