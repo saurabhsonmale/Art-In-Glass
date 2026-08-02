@@ -1,9 +1,10 @@
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from dotenv import dotenv_values
 from pydantic import AliasChoices, Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,16 +12,72 @@ _BASE = Path(__file__).resolve().parent
 _ON_RENDER = bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
 
 
+def _is_localhost_mongo(uri: str) -> bool:
+    u = (uri or "").lower()
+    return (
+        "localhost" in u
+        or "127.0.0.1" in u
+        or u.startswith("mongodb://0.0.0.0")
+    )
+
+
+def _read_live_env() -> Dict[str, str]:
+    path = _BASE / "live.env"
+    if not path.exists():
+        return {}
+    raw = dotenv_values(path)
+    return {k: str(v) for k, v in raw.items() if v is not None and str(v).strip()}
+
+
+def _bootstrap_process_env() -> None:
+    """Ensure Atlas credentials exist in os.environ before Settings loads.
+
+    - Prefer committed live.env over empty/missing vars
+    - On Render/production: override localhost MongoDB if Dashboard still has it
+    """
+    live = _read_live_env()
+    if not live:
+        return
+
+    current_mongo = (os.environ.get("MONGODB_URI") or os.environ.get("MONGO_URI") or "").strip()
+    live_mongo = (live.get("MONGODB_URI") or "").strip()
+
+    if live_mongo and (
+        not current_mongo
+        or (_ON_RENDER and _is_localhost_mongo(current_mongo))
+        or (
+            (os.environ.get("ENVIRONMENT") or "").lower() in {"production", "prod"}
+            and _is_localhost_mongo(current_mongo)
+        )
+    ):
+        os.environ["MONGODB_URI"] = live_mongo
+
+    for key in (
+        "JWT_SECRET_KEY",
+        "DATABASE_NAME",
+        "ENVIRONMENT",
+        "PUBLIC_BASE_URL",
+        "CORS_ORIGINS",
+        "JWT_ALGORITHM",
+        "ACCESS_TOKEN_EXPIRE_MINUTES",
+    ):
+        if key in live and not (os.environ.get(key) or "").strip():
+            os.environ[key] = live[key]
+
+    # If JWT is present in live.env and we're overriding localhost mongo, keep JWT aligned
+    if live.get("JWT_SECRET_KEY") and _ON_RENDER and not (os.environ.get("JWT_SECRET_KEY") or "").strip():
+        os.environ["JWT_SECRET_KEY"] = live["JWT_SECRET_KEY"]
+
+
+_bootstrap_process_env()
+
+
 def _env_files() -> Tuple[str, ...]:
-    """Load local .env and/or committed live.env (Render fallback)."""
     files: List[str] = []
-    # Prefer explicit process env; files fill gaps (pydantic: env wins over file)
-    local_env = _BASE / ".env"
-    live_env = _BASE / "live.env"
-    if local_env.exists():
-        files.append(str(local_env))
-    if live_env.exists():
-        files.append(str(live_env))
+    for name in (".env", "live.env"):
+        path = _BASE / name
+        if path.exists():
+            files.append(str(path))
     return tuple(files)
 
 
@@ -28,7 +85,6 @@ _ENV_FILES = _env_files()
 
 
 def _safe_mongo_host(uri: str) -> str:
-    """Log-safe host (no username/password)."""
     if not uri:
         return "(empty)"
     try:
@@ -41,15 +97,6 @@ def _safe_mongo_host(uri: str) -> str:
         return uri.split("://", 1)[-1].split("?", 1)[0]
     except Exception:
         return "(unparseable)"
-
-
-def _is_localhost_mongo(uri: str) -> bool:
-    u = (uri or "").lower()
-    return (
-        "localhost" in u
-        or "127.0.0.1" in u
-        or u.startswith("mongodb://0.0.0.0")
-    )
 
 
 class Settings(BaseSettings):
@@ -161,7 +208,7 @@ def _load_settings() -> Settings:
                 print(f"  - {name}", file=sys.stderr)
         for m in other_msgs:
             print(f"  - {m}", file=sys.stderr)
-        print("Ensure backend/live.env is deployed, or set Render Environment.", file=sys.stderr)
+        print("Ensure backend/live.env is deployed.", file=sys.stderr)
         print("=" * 64, file=sys.stderr)
         raise SystemExit(1) from exc
 
