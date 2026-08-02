@@ -1,5 +1,9 @@
 # Render Blueprint — Art In Glass API
 # Live URL: https://art-in-glass.onrender.com
+#
+# REQUIRED secrets (set in Dashboard → Environment — do NOT commit real values):
+#   MONGODB_URI=mongodb+srv://...
+#   JWT_SECRET_KEY=...
 services:
   - type: web
     name: art-in-glass
@@ -22,10 +26,10 @@ services:
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
-      - key: JWT_SECRET_KEY
-        value: art_in_glass_super_secret_key_2024_change_in_production
-      # Override this in Dashboard with your real MongoDB Atlas URI for live data
-      - key: MONGODB_URI
-        value: mongodb://localhost:27017/resin_art_db
       - key: PYTHON_VERSION
         value: "3.11.11"
+      # Must be set in Render Dashboard (Atlas URI — never localhost)
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true

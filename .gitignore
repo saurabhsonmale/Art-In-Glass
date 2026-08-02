@@ -13,12 +13,20 @@ ENV/
 env.bak/
 venv.bak/
 
-# Environment variables
+# Environment variables (never commit secrets)
 .env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+backend/.env
+backend/.env.production
 
 # Expo
 .expo/

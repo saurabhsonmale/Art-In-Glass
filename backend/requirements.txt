@@ -1,5 +1,5 @@
 # Compatible with Python 3.11 (Render) and 3.13/3.14 (local).
-# pydantic>=2.12 needed for Python 3.14 wheels (older pins build from source and fail).
+# Pin pydantic/pydantic-core to versions with cp314 wheels (avoid Rust source builds).
 fastapi==0.115.12
 uvicorn[standard]==0.34.0
 motor==3.6.0
@@ -10,5 +10,6 @@ bcrypt==4.0.1
 python-multipart==0.0.20
 python-dotenv==1.0.1
 pydantic==2.12.5
+pydantic-core==2.41.5
 pydantic-settings==2.10.1
 email-validator==2.2.0

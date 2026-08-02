@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from typing import Optional
+from typing import Optional, Dict, Any
 from config import settings
 
 
@@ -20,11 +20,10 @@ WISHLISTS_COLLECTION = "wishlists"
 SUPPORT_TICKETS_COLLECTION = "support_tickets"
 
 
-async def connect_to_mongo(raise_on_error: bool = False):
-    """Create database connection and initialize collections.
+async def connect_to_mongo() -> None:
+    """Create MongoDB client, ping, and initialize indexes.
 
-    On Render, do not crash the web process if Mongo is unreachable —
-    /health still responds so the service stays up while you set Atlas URI.
+    Raises on failure with an actionable message (no silent localhost fallback).
     """
     try:
         db.client = AsyncIOMotorClient(
@@ -34,27 +33,55 @@ async def connect_to_mongo(raise_on_error: bool = False):
         )
         db.database = db.client[settings.database_name]
 
-        # Fail fast if Atlas/network blocks Render (instead of hanging forever)
         await db.client.admin.command("ping")
-
         await initialize_collections()
 
-        print(f"[OK] Connected to MongoDB: {settings.database_name}")
+        print(
+            f"[OK] Connected to MongoDB db={settings.database_name} "
+            f"host={settings.mongo_host_for_logs}"
+        )
         print(
             "[OK] Collections initialized: "
             "users, products, orders, token_blacklist, wishlists, support_tickets"
         )
-        return True
     except Exception as e:
-        print(f"[ERROR] Error connecting to MongoDB: {e}")
+        db.client = None
+        db.database = None
+        print(f"[ERROR] MongoDB connection failed: {e}")
         print(
-            "[HINT] Set MONGODB_URI in Render → Environment to your Atlas URI. "
-            "Atlas → Network Access: allow 0.0.0.0/0 (or 74.220.49.0/24, 74.220.57.0/24)."
+            "[ERROR] Check MONGODB_URI env var and MongoDB Atlas Network Access whitelist "
+            "(allow 0.0.0.0/0 for Render). Confirm the URI is mongodb+srv://... not localhost."
         )
-        if raise_on_error and not settings.is_render:
-            raise
-        # Keep client/db refs for retry; APIs may fail until Mongo is reachable
-        return False
+        raise RuntimeError(
+            "MongoDB connection failed. Check MONGODB_URI env var and "
+            "MongoDB Atlas Network Access whitelist (0.0.0.0/0)."
+        ) from e
+
+
+async def ping_mongo() -> Dict[str, Any]:
+    """Lightweight DB connectivity check for /health."""
+    if db.client is None or db.database is None:
+        return {
+            "ok": False,
+            "database": "disconnected",
+            "host": settings.mongo_host_for_logs,
+            "error": "MongoDB client not initialized",
+        }
+    try:
+        await db.client.admin.command("ping")
+        return {
+            "ok": True,
+            "database": "connected",
+            "host": settings.mongo_host_for_logs,
+            "name": settings.database_name,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "database": "error",
+            "host": settings.mongo_host_for_logs,
+            "error": str(e),
+        }
 
 
 async def initialize_collections():
@@ -62,38 +89,32 @@ async def initialize_collections():
     if db.database is None:
         return
 
-    # Users — profile, auth, saved address, notification prefs
     users_collection = db.database[USERS_COLLECTION]
     await users_collection.create_index("email", unique=True)
     await users_collection.create_index("phone")
     await users_collection.create_index("role")
     await users_collection.create_index("created_at")
 
-    # Products — catalog for customers + admin
     products_collection = db.database[PRODUCTS_COLLECTION]
     await products_collection.create_index("category")
     await products_collection.create_index("is_active")
     await products_collection.create_index("created_at")
 
-    # Orders — customer purchase + admin queue
     orders_collection = db.database[ORDERS_COLLECTION]
     await orders_collection.create_index("customer_id")
     await orders_collection.create_index("order_status")
     await orders_collection.create_index("created_at")
     await orders_collection.create_index([("customer_id", 1), ("created_at", -1)])
 
-    # Token blacklist — logout / revoke
     token_blacklist_collection = db.database[TOKEN_BLACKLIST_COLLECTION]
     await token_blacklist_collection.create_index("token", unique=True)
     await token_blacklist_collection.create_index("expires_at", expireAfterSeconds=0)
     await token_blacklist_collection.create_index("user_id")
 
-    # Wishlists — customer saved products
     wishlists_collection = db.database[WISHLISTS_COLLECTION]
     await wishlists_collection.create_index("user_id", unique=True)
     await wishlists_collection.create_index("updated_at")
 
-    # Support tickets — help & support from profile
     support_collection = db.database[SUPPORT_TICKETS_COLLECTION]
     await support_collection.create_index("user_id")
     await support_collection.create_index("status")
@@ -101,10 +122,7 @@ async def initialize_collections():
 
 
 async def ensure_user_profile_fields(user_doc: dict) -> dict:
-    """
-    Return $set patch for missing profile fields on a user document.
-    Safe to call on login /me / update — does not overwrite existing values.
-    """
+    """Return $set patch for missing profile fields on a user document."""
     patch = {}
     if user_doc.get("created_at") is None:
         from datetime import datetime
@@ -129,6 +147,8 @@ async def close_mongo_connection():
     """Close database connection"""
     if db.client:
         db.client.close()
+        db.client = None
+        db.database = None
         print("MongoDB connection closed")
 
 

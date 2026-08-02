@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from database import (
     connect_to_mongo,
     close_mongo_connection,
     get_database,
+    ping_mongo,
     USERS_COLLECTION,
     PRODUCTS_COLLECTION,
 )
@@ -12,6 +14,7 @@ from routers import auth, products, orders, wishlist
 from auth import get_password_hash
 from datetime import datetime
 from config import settings
+import sys
 
 
 DEFAULT_NOTIFICATION_PREFS = {
@@ -24,13 +27,21 @@ DEFAULT_NOTIFICATION_PREFS = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    # Startup — do not abort process if Mongo is briefly unavailable on Render
-    mongo_ok = await connect_to_mongo(raise_on_error=False)
-    if not mongo_ok:
-        print("[WARN] Starting API without MongoDB connection; set MONGODB_URI (Atlas) on Render.")
-        yield
-        await close_mongo_connection()
-        return
+    # Startup check: confirm MONGODB_URI loaded (password never logged)
+    print(
+        f"[STARTUP] MONGODB_URI loaded=yes host={settings.mongo_host_for_logs} "
+        f"environment={settings.environment}"
+    )
+    if not settings.mongodb_uri or not settings.jwt_secret_key:
+        print(
+            "[FATAL] MONGODB_URI and JWT_SECRET_KEY are required. "
+            "Set them in Render Dashboard → Environment.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    # Fail fast if Mongo cannot be reached (no silent localhost fallback)
+    await connect_to_mongo()
 
     # Backfill legacy products missing is_active so they appear in the customer catalog
     try:
@@ -207,12 +218,22 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint (also used to wake Render free-tier)."""
-    return {
-        "status": "healthy",
+    """Health check — includes lightweight MongoDB ping.
+
+    Returns HTTP 503 when MongoDB is unreachable so Render/load balancers
+    do not mark a broken deploy as healthy.
+    """
+    mongo = await ping_mongo()
+    healthy = bool(mongo.get("ok"))
+    body = {
+        "status": "healthy" if healthy else "unhealthy",
         "public_base_url": settings.public_base_url,
         "environment": settings.environment,
+        "mongodb": mongo,
     }
+    if not healthy:
+        return JSONResponse(status_code=503, content=body)
+    return body
 
 
 if __name__ == "__main__":
