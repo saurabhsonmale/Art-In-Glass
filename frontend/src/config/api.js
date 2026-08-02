@@ -1,15 +1,17 @@
 import { Platform } from 'react-native';
 
 /**
- * API host resolution
- * - EXPO_PUBLIC_API_URL wins (frontend/.env or eas.json)
- * - Release APK → live Render
- * - Expo Go / __DEV__ without env → LAN PC IP
+ * API host resolution (safe for APK + local Expo Go)
+ *
+ * - Release / APK (__DEV__ === false): ALWAYS live Render HTTPS
+ *   (never bake a LAN IP into the store/APK build)
+ * - Expo Go / __DEV__: EXPO_PUBLIC_API_URL, else LAN PC IP
+ * - Web prod → live; web dev → env or localhost
  */
 
 const LIVE_HOST = 'https://art-in-glass.onrender.com';
 
-// Update if `ipconfig` IPv4 changes
+// Update if `ipconfig` IPv4 changes (Expo Go only)
 const LAN_IP = '10.22.86.116';
 const LAN_PORT = '8000';
 const LAN_HOST = `http://${LAN_IP}:${LAN_PORT}`;
@@ -18,12 +20,15 @@ const LOCAL_HOST = 'http://localhost:8000';
 const envUrl = (process.env.EXPO_PUBLIC_API_URL || '').trim().replace(/\/$/, '');
 
 function resolveHost() {
-  if (envUrl && !/loca\.lt/i.test(envUrl)) {
-    return envUrl;
+  const isRelease = typeof __DEV__ !== 'undefined' && !__DEV__;
+
+  // APK / production binary — always live (ignores accidental LAN env)
+  if (isRelease) {
+    return LIVE_HOST;
   }
 
-  if (typeof __DEV__ !== 'undefined' && !__DEV__) {
-    return LIVE_HOST;
+  if (envUrl && !/loca\.lt/i.test(envUrl)) {
+    return envUrl;
   }
 
   if (Platform.OS === 'web') {

@@ -22,6 +22,9 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://art-in-glass.onrender.com"
+      },
+      "android": {
+        "buildType": "apk"
       }
     }
   },

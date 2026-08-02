@@ -46,6 +46,7 @@
       ]
     ],
     "extra": {
+      "apiUrl": "https://art-in-glass.onrender.com",
       "eas": {
         "projectId": "6cda189f-cc36-4e39-aa1c-7296724a8dcc"
       }
