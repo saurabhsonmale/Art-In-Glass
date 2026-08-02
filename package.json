@@ -1,8 +1,12 @@
 {
   "name": "art-in-glass",
   "private": true,
-  "description": "Monorepo root. The live API is Python under /backend — do not use yarn start for Render. See render.yaml.",
+  "description": "Monorepo root helper for Render when service is still Node/yarn. Prefer Python runtime via render.yaml.",
   "scripts": {
+    "postinstall": "node ./scripts/render-install.js",
     "start": "node ./scripts/render-start.js"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

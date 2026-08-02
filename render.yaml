@@ -26,7 +26,7 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
       - key: PYTHON_VERSION
-        value: "3.11.9"
+        value: "3.11.11"
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET_KEY
