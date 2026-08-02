@@ -1,6 +1,9 @@
-from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, Dict, Any
+
+from motor.motor_asyncio import AsyncIOMotorClient
+
 from config import settings
+from mongo_client import create_motor_client
 
 
 class Database:
@@ -26,10 +29,9 @@ async def connect_to_mongo() -> None:
     Raises on failure with an actionable message (no silent localhost fallback).
     """
     try:
-        db.client = AsyncIOMotorClient(
+        db.client = create_motor_client(
             settings.mongodb_uri,
-            serverSelectionTimeoutMS=settings.mongodb_server_selection_timeout_ms,
-            connectTimeoutMS=settings.mongodb_server_selection_timeout_ms,
+            timeout_ms=settings.mongodb_server_selection_timeout_ms,
         )
         db.database = db.client[settings.database_name]
 
@@ -47,14 +49,23 @@ async def connect_to_mongo() -> None:
     except Exception as e:
         db.client = None
         db.database = None
+        err = str(e)
         print(f"[ERROR] MongoDB connection failed: {e}")
         print(
-            "[ERROR] Check MONGODB_URI env var and MongoDB Atlas Network Access whitelist "
-            "(allow 0.0.0.0/0 for Render). Confirm the URI is mongodb+srv://... not localhost."
+            "[ERROR] Fix checklist:\n"
+            "  1) Atlas → Network Access → Allow Access from Anywhere (0.0.0.0/0)\n"
+            "     (SSL TLSV1_ALERT_INTERNAL_ERROR usually means IP not whitelisted)\n"
+            "  2) MONGODB_URI must be mongodb+srv://... (Atlas), not localhost\n"
+            "  3) certifi/dnspython installed (see requirements.txt)"
         )
+        if "SSL" in err or "TLS" in err:
+            print(
+                "[ERROR] SSL handshake failed — almost always Atlas Network Access. "
+                "Add 0.0.0.0/0, wait 1–2 minutes, redeploy."
+            )
         raise RuntimeError(
-            "MongoDB connection failed. Check MONGODB_URI env var and "
-            "MongoDB Atlas Network Access whitelist (0.0.0.0/0)."
+            "MongoDB connection failed. Allow 0.0.0.0/0 in Atlas Network Access "
+            "and confirm MONGODB_URI is mongodb+srv://..."
         ) from e
 
 
