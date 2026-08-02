@@ -24,12 +24,19 @@ DEFAULT_NOTIFICATION_PREFS = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    # Startup
-    await connect_to_mongo()
+    # Startup — do not abort process if Mongo is briefly unavailable on Render
+    mongo_ok = await connect_to_mongo(raise_on_error=False)
+    if not mongo_ok:
+        print("[WARN] Starting API without MongoDB connection; set MONGODB_URI (Atlas) on Render.")
+        yield
+        await close_mongo_connection()
+        return
 
     # Backfill legacy products missing is_active so they appear in the customer catalog
     try:
         db = get_database()
+        if db is None:
+            raise RuntimeError("Database not initialized")
         products_collection = db[PRODUCTS_COLLECTION]
         repair_result = await products_collection.update_many(
             {"is_active": {"$exists": False}},

@@ -1,42 +1,56 @@
 import os
-import sys
+from pathlib import Path
 from typing import List
 
-from pydantic import AliasChoices, Field, ValidationError
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Local: use .env. Render: .env is not deployed, so use .env.production + defaults.
+_BASE = Path(__file__).resolve().parent
+_ON_RENDER = bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
+_ENV_FILES = []
+if _ON_RENDER:
+    if (_BASE / ".env.production").exists():
+        _ENV_FILES.append(str(_BASE / ".env.production"))
+elif (_BASE / ".env").exists():
+    _ENV_FILES.append(str(_BASE / ".env"))
+elif (_BASE / ".env.production").exists():
+    _ENV_FILES.append(str(_BASE / ".env.production"))
 
 
 class Settings(BaseSettings):
-    """App settings from environment / .env (required on Render)."""
+    """Required settings with safe defaults so Render can boot without Dashboard secrets.
+
+    On live, set MONGODB_URI in Render → Environment to your Atlas URI
+    (overrides the default). JWT has a default for deploy; change in production.
+    """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_ENV_FILES or None,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
 
-    # MongoDB — set MONGODB_URI on Render (Atlas connection string)
+    # Required — defaults allow boot; override MONGODB_URI on Render with Atlas
     mongodb_uri: str = Field(
-        ...,
+        default="mongodb://localhost:27017/resin_art_db",
         validation_alias=AliasChoices("MONGODB_URI", "MONGO_URI", "DATABASE_URL"),
     )
     database_name: str = Field(default="resin_art_db", validation_alias="DATABASE_NAME")
 
-    # JWT — set JWT_SECRET_KEY on Render (any long random string)
     jwt_secret_key: str = Field(
-        ...,
+        default="art_in_glass_super_secret_key_2024_change_in_production",
         validation_alias=AliasChoices("JWT_SECRET_KEY", "SECRET_KEY"),
     )
     jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(
-        default=30,
+        default=1440,
         validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
     )
 
-    # Server (Render injects PORT)
     port: int = Field(default=8000, validation_alias="PORT")
-    environment: str = Field(default="development", validation_alias="ENVIRONMENT")
+    environment: str = Field(default="production", validation_alias="ENVIRONMENT")
 
     public_base_url: str = Field(
         default="https://art-in-glass.onrender.com",
@@ -58,32 +72,19 @@ class Settings(BaseSettings):
             origins.append(live)
         return origins or ["*"]
 
-
-def _load_settings() -> Settings:
-    try:
-        return Settings()
-    except ValidationError as exc:
-        missing = []
-        for err in exc.errors():
-            loc = err.get("loc") or ()
-            if loc:
-                missing.append(str(loc[0]))
-
-        print("=" * 60, file=sys.stderr)
-        print("[FATAL] Missing required environment variables:", file=sys.stderr)
-        if "mongodb_uri" in missing or not os.getenv("MONGODB_URI"):
-            print("  - MONGODB_URI  (MongoDB Atlas connection string)", file=sys.stderr)
-        if "jwt_secret_key" in missing or not os.getenv("JWT_SECRET_KEY"):
-            print("  - JWT_SECRET_KEY  (any long random secret)", file=sys.stderr)
-        print("", file=sys.stderr)
-        print("On Render Dashboard → art-in-glass → Environment, add:", file=sys.stderr)
-        print("  MONGODB_URI=mongodb+srv://USER:PASS@CLUSTER/.../resin_art_db", file=sys.stderr)
-        print("  JWT_SECRET_KEY=change_me_to_a_long_random_string", file=sys.stderr)
-        print("  DATABASE_NAME=resin_art_db", file=sys.stderr)
-        print("  ENVIRONMENT=production", file=sys.stderr)
-        print("Then Manual Deploy → Deploy latest commit.", file=sys.stderr)
-        print("=" * 60, file=sys.stderr)
-        raise
+    @property
+    def is_render(self) -> bool:
+        return bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
 
 
-settings = _load_settings()
+settings = Settings()
+
+# Helpful boot log (no secrets printed)
+_uri = settings.mongodb_uri
+_safe = _uri.split("@")[-1] if "@" in _uri else _uri
+print(f"[OK] Settings loaded env={settings.environment} db_host={_safe}")
+if settings.is_render and _uri.startswith("mongodb://localhost"):
+    print(
+        "[WARN] MONGODB_URI is localhost on Render — set Atlas URI in "
+        "Dashboard → Environment → MONGODB_URI for live data."
+    )

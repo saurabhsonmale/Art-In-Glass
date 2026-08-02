@@ -1,8 +1,5 @@
 # Render Blueprint — Art In Glass API
 # Live URL: https://art-in-glass.onrender.com
-#
-# IMPORTANT: This is a Python FastAPI service (NOT Node / yarn).
-# In Render Dashboard → Settings, use the values below (or apply this blueprint).
 services:
   - type: web
     name: art-in-glass
@@ -25,12 +22,10 @@ services:
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
+      - key: JWT_SECRET_KEY
+        value: art_in_glass_super_secret_key_2024_change_in_production
+      # Override this in Dashboard with your real MongoDB Atlas URI for live data
+      - key: MONGODB_URI
+        value: mongodb://localhost:27017/resin_art_db
       - key: PYTHON_VERSION
         value: "3.11.11"
-      # REQUIRED secrets — set these in Render Dashboard → Environment
-      # (sync:false = you must paste values; deploy fails without them)
-      - key: MONGODB_URI
-        sync: false
-      - key: JWT_SECRET_KEY
-        generateValue: true
-

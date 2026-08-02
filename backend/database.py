@@ -20,8 +20,12 @@ WISHLISTS_COLLECTION = "wishlists"
 SUPPORT_TICKETS_COLLECTION = "support_tickets"
 
 
-async def connect_to_mongo():
-    """Create database connection and initialize collections"""
+async def connect_to_mongo(raise_on_error: bool = False):
+    """Create database connection and initialize collections.
+
+    On Render, do not crash the web process if Mongo is unreachable —
+    /health still responds so the service stays up while you set Atlas URI.
+    """
     try:
         db.client = AsyncIOMotorClient(
             settings.mongodb_uri,
@@ -40,13 +44,17 @@ async def connect_to_mongo():
             "[OK] Collections initialized: "
             "users, products, orders, token_blacklist, wishlists, support_tickets"
         )
+        return True
     except Exception as e:
         print(f"[ERROR] Error connecting to MongoDB: {e}")
         print(
-            "[HINT] On MongoDB Atlas → Network Access, allow Render / public access "
-            "(0.0.0.0/0) or the hosting CIDRs: 74.220.49.0/24, 74.220.57.0/24"
+            "[HINT] Set MONGODB_URI in Render → Environment to your Atlas URI. "
+            "Atlas → Network Access: allow 0.0.0.0/0 (or 74.220.49.0/24, 74.220.57.0/24)."
         )
-        raise
+        if raise_on_error and not settings.is_render:
+            raise
+        # Keep client/db refs for retry; APIs may fail until Mongo is reachable
+        return False
 
 
 async def initialize_collections():
