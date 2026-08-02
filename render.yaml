@@ -27,7 +27,10 @@ services:
         value: "1440"
       - key: PYTHON_VERSION
         value: "3.11.11"
+      # REQUIRED secrets — set these in Render Dashboard → Environment
+      # (sync:false = you must paste values; deploy fails without them)
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET_KEY
-        sync: false
+        generateValue: true
+
