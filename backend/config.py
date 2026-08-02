@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, ValidationError, field_validator, model_validator
@@ -10,11 +10,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _BASE = Path(__file__).resolve().parent
 _ON_RENDER = bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
 
-# Single local file: backend/.env (gitignored).
-# Render ignores this file — set the same keys in Dashboard → Environment.
-_ENV_FILE: Optional[str] = None
-if not _ON_RENDER and (_BASE / ".env").exists():
-    _ENV_FILE = str(_BASE / ".env")
+
+def _env_files() -> Tuple[str, ...]:
+    """Load local .env and/or committed live.env (Render fallback)."""
+    files: List[str] = []
+    # Prefer explicit process env; files fill gaps (pydantic: env wins over file)
+    local_env = _BASE / ".env"
+    live_env = _BASE / "live.env"
+    if local_env.exists():
+        files.append(str(local_env))
+    if live_env.exists():
+        files.append(str(live_env))
+    return tuple(files)
+
+
+_ENV_FILES = _env_files()
 
 
 def _safe_mongo_host(uri: str) -> str:
@@ -22,7 +32,6 @@ def _safe_mongo_host(uri: str) -> str:
     if not uri:
         return "(empty)"
     try:
-        # mongodb+srv://user:pass@host/... or mongodb://host:27017/...
         if "@" in uri:
             return uri.split("@", 1)[1].split("?", 1)[0].rstrip("/")
         parsed = urlparse(uri)
@@ -44,28 +53,25 @@ def _is_localhost_mongo(uri: str) -> bool:
 
 
 class Settings(BaseSettings):
-    """Settings from environment (Render) and optional local .env file."""
+    """Settings from process env, then .env / live.env files."""
 
     model_config = SettingsConfigDict(
-        env_file=_ENV_FILE,
+        env_file=_ENV_FILES if _ENV_FILES else None,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
-        # Environment variables always win over env_file
         env_ignore_empty=True,
     )
 
     mongodb_uri: str = Field(
         ...,
         validation_alias=AliasChoices("MONGODB_URI", "MONGO_URI", "DATABASE_URL"),
-        description="MongoDB connection string (Atlas in production)",
     )
     database_name: str = Field(default="resin_art_db", validation_alias="DATABASE_NAME")
 
     jwt_secret_key: str = Field(
         ...,
         validation_alias=AliasChoices("JWT_SECRET_KEY", "SECRET_KEY"),
-        description="JWT signing secret",
     )
     jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(
@@ -95,14 +101,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _reject_localhost_in_production(self):
-        """Never allow localhost MongoDB on Render / production."""
         env = (self.environment or "").strip().lower()
         prod_like = _ON_RENDER or env in {"production", "prod", "staging"}
         if prod_like and _is_localhost_mongo(self.mongodb_uri):
             raise ValueError(
                 "MONGODB_URI points to localhost, which cannot work on Render. "
-                "Set MONGODB_URI in Render Dashboard → Environment to your "
-                "MongoDB Atlas URI (mongodb+srv://...)."
+                "Use Atlas mongodb+srv:// in live.env or Render Environment."
             )
         return self
 
@@ -134,7 +138,6 @@ def _load_settings() -> Settings:
         for err in exc.errors():
             loc = ".".join(str(x) for x in (err.get("loc") or ()))
             msg = err.get("msg") or ""
-            # Map internal field names / aliases to env var names
             key = loc.upper().replace(".", "_")
             if "mongodb" in loc.lower() or "MONGODB" in key or "MONGO" in key:
                 missing_names.append("MONGODB_URI")
@@ -143,7 +146,6 @@ def _load_settings() -> Settings:
             else:
                 other_msgs.append(f"{loc}: {msg}")
 
-        # Deduplicate while preserving order
         seen = set()
         ordered = []
         for n in missing_names:
@@ -159,20 +161,7 @@ def _load_settings() -> Settings:
                 print(f"  - {name}", file=sys.stderr)
         for m in other_msgs:
             print(f"  - {m}", file=sys.stderr)
-        print("", file=sys.stderr)
-        print("Set these in Render Dashboard → Environment (or local .env):", file=sys.stderr)
-        print(
-            "  MONGODB_URI=mongodb+srv://USER:PASS@CLUSTER/resin_art_db"
-            "?retryWrites=true&w=majority",
-            file=sys.stderr,
-        )
-        print("  JWT_SECRET_KEY=<long-random-secret>", file=sys.stderr)
-        print("  DATABASE_NAME=resin_art_db", file=sys.stderr)
-        print("  ENVIRONMENT=production", file=sys.stderr)
-        print(
-            "Atlas → Network Access: allow 0.0.0.0/0 so Render can connect.",
-            file=sys.stderr,
-        )
+        print("Ensure backend/live.env is deployed, or set Render Environment.", file=sys.stderr)
         print("=" * 64, file=sys.stderr)
         raise SystemExit(1) from exc
 
@@ -182,5 +171,6 @@ settings = _load_settings()
 print(
     f"[OK] Settings loaded environment={settings.environment} "
     f"mongodb_host={settings.mongo_host_for_logs} "
-    f"mongodb_uri_loaded=yes"
+    f"mongodb_uri_loaded=yes "
+    f"on_render={_ON_RENDER} env_files={len(_ENV_FILES)}"
 )
