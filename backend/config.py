@@ -10,8 +10,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _BASE = Path(__file__).resolve().parent
 _ON_RENDER = bool(os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL"))
 
-# Local only: optional .env. Production/Render uses real process env (Dashboard).
-# Never require .env to exist. Never load a committed file with localhost secrets.
+# Single local file: backend/.env (gitignored).
+# Render ignores this file — set the same keys in Dashboard → Environment.
 _ENV_FILE: Optional[str] = None
 if not _ON_RENDER and (_BASE / ".env").exists():
     _ENV_FILE = str(_BASE / ".env")

@@ -1,5 +1,5 @@
 """
-Verify Atlas credentials from backend/.env.production (gitignored).
+Verify Atlas credentials from the single backend/.env (gitignored).
 Usage (from backend/):
   python verify_atlas.py
 """
@@ -9,13 +9,13 @@ from dotenv import load_dotenv
 import os
 from pymongo import MongoClient
 
-env_path = Path(__file__).resolve().parent / ".env.production"
+env_path = Path(__file__).resolve().parent / ".env"
 if not env_path.exists():
-    raise SystemExit("Missing backend/.env.production")
+    raise SystemExit("Missing backend/.env")
 
 load_dotenv(env_path)
 uri = os.getenv("MONGODB_URI", "")
-if not uri or "ReplaceMe" in uri or "<db_username>" in uri:
+if not uri or "USERNAME" in uri or "<db_username>" in uri or "ReplaceMe" in uri:
     raise SystemExit("MONGODB_URI still has a placeholder username")
 
 client = MongoClient(uri, serverSelectionTimeoutMS=15000)
